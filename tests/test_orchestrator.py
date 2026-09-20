@@ -11,6 +11,9 @@ class MockProvider:
         self.call_count = 0
         self.execute = AsyncMock()
 
+    def pack_single_prompt(self, prompt: str) -> object:
+        return prompt
+
 
 @pytest.mark.asyncio
 @pytest.mark.slow

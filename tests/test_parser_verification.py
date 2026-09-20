@@ -17,6 +17,7 @@ def test_parser_extracts_verification_prefix():
 
     assert len(result["batch"]) == 1
     item = result["batch"][0]
+    assert isinstance(item, SampleItem)
     assert item.id == "h1"
     assert item.verification_prefix == "Original T"
     assert item.translated_text == "Перевод"
@@ -31,5 +32,9 @@ def test_parser_handles_full_field_name_and_alias():
     """
     result = parser.parse(raw_json, validation_model=SampleItem)
 
-    assert result["batch"][0].verification_prefix == "Prefix 1"
-    assert result["batch"][1].verification_prefix == "Prefix 2"
+    item0 = result["batch"][0]
+    item1 = result["batch"][1]
+    assert isinstance(item0, SampleItem)
+    assert isinstance(item1, SampleItem)
+    assert item0.verification_prefix == "Prefix 1"
+    assert item1.verification_prefix == "Prefix 2"

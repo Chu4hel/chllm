@@ -15,10 +15,19 @@ from .utils import split_batch
 try:
     from chutils.logger import setup_logger
 except ImportError:
-    import logging
+    import logging  # chutils: ignore[ChutilsIntegrationRule]
 
     def setup_logger(name: str = "chllm") -> Any:
+        """Создает резервный логгер, если chutils не установлен.
+
+        Args:
+            name: Имя логгера.
+
+        Returns:
+            Экземпляр стандартного логгера.
+        """
         return logging.getLogger(name)
+
 
 logger = setup_logger(__name__)
 

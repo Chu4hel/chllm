@@ -81,9 +81,11 @@ uv add "chllm[all]"
 from pydantic import BaseModel
 from chllm import RobustLLMParser
 
+
 class UserItem(BaseModel):
     id: int
     name: str
+
 
 parser = RobustLLMParser()
 
@@ -122,10 +124,12 @@ demasked = masker.demask(translated_text, masked.mapping)
 ```python
 from chllm import Orchestrator, RetryStrategy, RateLimitError
 
+
 class MyLLMProvider:
     async def execute(self, payload: str) -> str:
         # Ваш сетевой вызов к API модели
         return await api_client.generate(payload)
+
 
 orchestrator = Orchestrator(
     provider=MyLLMProvider(),

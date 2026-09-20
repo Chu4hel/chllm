@@ -1,0 +1,69 @@
+[project]
+name = "chllm"
+version = "0.1.0"
+description = "Отказоустойчивый Python фреймворк для взаимодействия с LLM, валидации Pydantic и надежного парсинга структурированных ответов."
+authors = [{ name = "Chu4hel", email = "sergeiivanov636@gmail.com" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.8.0",
+]
+
+[project.optional-dependencies]
+chutils = ["chutils>=3.5.0"]
+tokens = ["tiktoken>=0.7.0"]
+all = [
+    "chutils>=3.5.0",
+    "tiktoken>=0.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.8.0",
+    "mypy>=1.10.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chllm"]
+
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "slow: маркер для долгих тестов",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "SIM", "RUF"]
+ignore = [
+    "RUF001",  # Ambiguous unicode characters in strings (русский язык)
+    "RUF002",  # Ambiguous unicode characters in docstrings
+    "RUF003",  # Ambiguous unicode characters in comments
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+ignore_missing_imports = true

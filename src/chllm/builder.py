@@ -25,6 +25,8 @@ class PromptBuilder:
         context: list[str] | None = None,
         instruction: str | list[str] | None = None,
         data_label: str = "INPUT DATA",
+        context_label: str = "CONTEXT",
+        response_model: type[BaseModel] | None = None,
     ) -> str:
         """Собирает финальный текст промпта.
 
@@ -33,6 +35,8 @@ class PromptBuilder:
             context: Список строк контекста (предыдущие события/диалоги).
             instruction: Дополнительная инструкция (строка) или список инструкций.
             data_label: Заголовок для блока данных в промпте.
+            context_label: Заголовок для блока контекста в промпте.
+            response_model: Опциональная Pydantic-модель для автоматической генерации JSON-схемы.
 
         Returns:
             str: Сформированный текст промпта.
@@ -50,12 +54,16 @@ class PromptBuilder:
             else:
                 instructions.append(instruction.strip())
 
+        if response_model:
+            schema_instruction = self.generate_schema_instruction(response_model)
+            instructions.append(schema_instruction)
+
         if instructions:
             parts.append("\n".join(instructions))
 
         # 2. Контекст
         if context:
-            parts.append("\n--- CONTEXT ---")
+            parts.append(f"\n--- {context_label} ---")
             parts.append("\n".join(context))
 
         # 3. Данные (JSON)
@@ -87,3 +95,27 @@ class PromptBuilder:
 
         # 4. Фолбэк на строковое представление
         return str(data)
+
+    @staticmethod
+    def generate_schema_instruction(model: type[BaseModel]) -> str:
+        """Формирует строгую инструкцию для LLM с JSON-схемой целевой Pydantic-модели.
+
+        Args:
+            model: Pydantic-модель для генерации схемы.
+
+        Returns:
+            Строка инструкции с JSON-схемой.
+        """
+        if hasattr(model, "model_json_schema"):
+            schema_dict = model.model_json_schema()
+        elif hasattr(model, "schema"):
+            schema_dict = model.schema()
+        else:
+            return ""
+
+        schema_json = json.dumps(schema_dict, indent=2, ensure_ascii=False)
+        return (
+            "ОТВЕТ ДОЛЖЕН БЫТЬ СТРОГО В ФОРМАТЕ JSON, СООТВЕТСТВУЮЩЕМ СЛЕДУЮЩЕЙ СХЕМЕ:\n"
+            f"```json\n{schema_json}\n```\n"
+            "Не добавляй никаких вводных слов, пояснений или текста вне JSON-блока."
+        )

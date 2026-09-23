@@ -10,19 +10,25 @@
 
 1. **RobustLLMParser (parser.py)**:
    - Извлечение JSON, Markdown и очистка ответа от технического шума LLM.
-   - Восстановление поврежденного JSON и валидация схем Pydantic.
+   - Восстановление поврежденного JSON, Zero-Config Fallback и валидация схем Pydantic.
+   - Потоковый парсинг неполного JSON чанками (`parse_stream`).
 
 2. **Orchestrator, AgentOrchestrator (orchestrator.py)**:
-   - Управление ротацией API-ключей и прокси.
+   - Цикл самоисправления схемы ответов (Self-Correction через `execute_structured`).
    - Стратегии повторных попыток (RetryStrategy) с экспоненциальной задержкой.
+   - Бинарное деление батчей при блокировке контента.
 
-3. **ContentMasker (masking.py)**:
-   - Маскирование и защитная подстановка чувствительных данных и тегов Ren'Py перед отправкой в LLM.
+3. **AsyncBatchProcessor (batch_processor.py)**:
+   - Асинхронная параллельная обработка списков с ограничением параллелизма (семафор) и изоляцией ошибок.
 
-4. **PromptBuilder, ContextBuilder (uilder.py, context.py)**:
-   - Динамическая сборка системных и пользовательских промптов с ограничением по токенам.
+4. **PromptBuilder, ContextBuilder (builder.py, context.py)**:
+   - Динамическая сборка промптов с автогенерацией строгой JSON-схемы по Pydantic-модели (`response_model`).
+   - Управление контекстом и историей диалогов.
 
-5. **TokenCounter, UsageMetrics (metrics.py)**:
+5. **ContentMasker (masking.py)**:
+   - Маскирование и защитная подстановка чувствительных данных и тегов перед отправкой в LLM.
+
+6. **TokenCounter, UsageMetrics (metrics.py)**:
    - Подсчет токенов и сбор статистики использования API.
 
 ## Правила использования

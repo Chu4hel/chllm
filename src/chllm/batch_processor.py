@@ -54,7 +54,7 @@ class BatchItemResult(Generic[T_Input, T_Output]):
         return self.error is None
 
 
-class AsyncBatchProcessor(Generic[T_Input, T_Output]):
+class AsyncBatchProcessor:
     """Асинхронный процессор для параллельной обработки элементов с контролем нагрузки."""
 
     def __init__(

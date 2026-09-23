@@ -55,5 +55,10 @@ async def test_async_batch_processor_handles_errors():
 async def test_async_batch_processor_empty():
     """Тест пустого списка элементов."""
     processor = AsyncBatchProcessor()
-    results = await processor.process([], lambda x: x)
+
+    async def identity(x: str) -> str:
+        return x
+
+    empty_items: list[str] = []
+    results = await processor.process(empty_items, identity)
     assert results == []

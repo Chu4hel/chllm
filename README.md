@@ -59,7 +59,13 @@ uv add "chllm[all]"
 - **Одиночные запросы (`execute_single`)**: универсальное извлечение текста из любых контейнеров (`dict` или объектов) и полей (`content`, `text`, `message`, `output` и др.).
 - **Агентный цикл (`AgentOrchestrator`)**: метод `execute_tools` берет на себя выполнение вызовов инструментов.
 
-### 3. Провайдеры-адаптеры (`chllm.providers`)
+### 3. AsyncBatchProcessor (`chllm.batch_processor`)
+Асинхронный процессор для массовой параллельной обработки элементов с контролем нагрузки:
+- **Ограничение параллелизма (Semaphore)**: параметр `concurrency_limit` предотвращает превышение лимитов запросов в секунду (RPS).
+- **Изоляция ошибок**: при `return_exceptions=True` сбой в одном элементе не роняет весь пакет, сохраняя результат и ошибку для каждого элемента.
+- **Управление темпом (Rate Pacing)**: параметр `delay_between_requests` позволяет задавать интервалы между вызовами.
+
+### 4. Провайдеры-адаптеры (`chllm.providers`)
 Готовые провайдеры для быстрого старта с протоколом `LLMProvider`:
 - `GenericCallableProvider`: оборачивает любую функцию или корутину `async def (payload) -> response`.
 - `OpenAICompatibleProvider`: адаптер для любых OpenAI-совместимых клиентов (`AsyncOpenAI`, LiteLLM, vLLM, Ollama, DeepSeek).

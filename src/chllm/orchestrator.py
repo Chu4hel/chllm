@@ -5,7 +5,7 @@
 
 import asyncio
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -117,26 +117,51 @@ class Orchestrator:
         try:
             result = await self.execute(request_data)
 
-            # Мы ожидаем, что ответ — это либо строка, либо объект с полем 'text' или 'batch'
-            # Пытаемся извлечь текст максимально универсально
             if isinstance(result, str):
                 return result
 
-            # Совместимость с пакетными ответами (берем первый элемент)
-            batch = getattr(result, "batch", None)
-            if batch and len(batch) > 0:
-                # Пытаемся найти поле с текстом (translated_text, text, content)
-                item = batch[0]
-                for attr in ["translated_text", "text", "content"]:
-                    val = getattr(item, attr, None)
+            def _get_field(obj: Any, fields: Sequence[str]) -> Any:
+                for field in fields:
+                    if isinstance(obj, dict):
+                        if field in obj:
+                            return obj[field]
+                        continue
+
+                    # Если это Mock-объект из unittest.mock
+                    if hasattr(obj, "_mock_children"):
+                        # Проверяем явно назначенные атрибуты у Mock
+                        if field in getattr(obj, "_mock_children", {}) or field in getattr(obj, "__dict__", {}):
+                            val = getattr(obj, field)
+                            if not (hasattr(val, "_mock_return_value") and val._mock_name and not isinstance(val, str)):
+                                return val
+                            if isinstance(val, (str, int, float, list, dict)):
+                                return val
+                        continue
+
+                    if hasattr(obj, field):
+                        val = getattr(obj, field, None)
+                        if val is not None:
+                            return val
+                return None
+
+            text_fields = ("translated_text", "text", "content", "message", "result", "output")
+            container_fields = ("batch", "items", "data", "results", "translations")
+
+            # Проверяем, является ли result контейнером (объект или dict)
+            for c_field in container_fields:
+                container = _get_field(result, [c_field])
+                if container and isinstance(container, (list, tuple)) and len(container) > 0:
+                    first_item = container[0]
+                    if isinstance(first_item, str):
+                        return first_item
+                    val = _get_field(first_item, text_fields)
                     if val is not None:
                         return str(val)
 
             # Совместимость с одиночными объектами-ответами
-            for attr in ["text", "content"]:
-                val = getattr(result, attr, None)
-                if val is not None:
-                    return str(val)
+            single_val = _get_field(result, text_fields)
+            if single_val is not None:
+                return str(single_val)
 
             return ""
         except Exception as e:

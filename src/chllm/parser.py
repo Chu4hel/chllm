@@ -79,6 +79,7 @@ class RobustLLMParser:
         container_keys: str | Sequence[str] | None = None,
         glossary_key: str = "suggested_glossary_terms",
         field_aliases: Mapping[str, str] | None = None,
+        include_empty_glossary: bool = True,
     ) -> dict[str, list[T | dict[str, Any]]]:
         """Парсит сырой текст ответа ИИ в структурированный словарь.
 
@@ -90,6 +91,7 @@ class RobustLLMParser:
             container_keys: Список допустимых ключей контейнера или одиночный ключ.
             glossary_key: Имя ключа глоссария (по умолчанию 'suggested_glossary_terms').
             field_aliases: Маппинг алиасов полей для нормализации перед валидацией.
+            include_empty_glossary: Включать ли ключ глоссария в результат, если он пуст.
 
         Returns:
             Dict[str, List]: Словарь с ключом контейнера (по умолчанию 'batch' или container_key)
@@ -98,7 +100,10 @@ class RobustLLMParser:
         out_key = container_key or self._default_container_key
 
         if not raw_text or not raw_text.strip():
-            return {out_key: [], glossary_key: []}
+            result_empty: dict[str, list[T | dict[str, Any]]] = {out_key: []}
+            if include_empty_glossary or glossary_model:
+                result_empty[glossary_key] = []
+            return result_empty
 
         # Вычисляем список ключей-кандидатов для контейнера
         candidate_keys: list[str] = []
@@ -188,10 +193,47 @@ class RobustLLMParser:
                         )
                 except json.JSONDecodeError:
                     continue
-        return {
-            out_key: validated_items,
-            glossary_key: suggested_glossary_terms,
-        }
+
+        result: dict[str, list[T | dict[str, Any]]] = {out_key: validated_items}
+        if include_empty_glossary or suggested_glossary_terms or glossary_model:
+            result[glossary_key] = suggested_glossary_terms
+
+        return result
+
+    def parse_items(
+        self,
+        raw_text: str,
+        validation_model: type[T] | None = None,
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> list[T | dict[str, Any]]:
+        """Парсит ответ нейросети и сразу возвращает список элементов.
+
+        Удобный метод-обертка для прямого получения списка валидированных сущностей
+        без необходимости извлекать их по ключу словаря.
+
+        Args:
+            raw_text: Текст ответа от ИИ.
+            validation_model: Опциональная Pydantic-модель для элементов.
+            container_key: Имя целевого контейнера.
+            container_keys: Список допустимых ключей контейнера или одиночный ключ.
+            field_aliases: Маппинг алиасов полей.
+
+        Returns:
+            Список валидированных объектов модели (или словарей).
+        """
+        out_key = container_key or self._default_container_key
+        parsed = self.parse(
+            raw_text,
+            validation_model=validation_model,
+            container_key=out_key,
+            container_keys=container_keys,
+            field_aliases=field_aliases,
+            include_empty_glossary=False,
+        )
+        return parsed.get(out_key, [])
 
     def _find_json_blocks(self, text: str) -> list[str]:
         """Находит все сбалансированные JSON-блоки ({...} или [...]) в тексте."""

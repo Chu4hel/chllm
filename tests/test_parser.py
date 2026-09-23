@@ -137,3 +137,23 @@ def test_parse_custom_field_aliases(parser):
     assert len(result["items"]) == 1
     assert result["items"][0].full_name == "Alice"
     assert result["items"][0].age == 30
+
+
+def test_parse_items_convenience_method(parser):
+    """Тест метода parse_items, возвращающего сразу список объектов."""
+    raw = '{"cards": [{"title": "Knight", "points": 5}]}'
+    cards = parser.parse_items(raw, validation_model=CustomCard, container_key="cards")
+
+    assert isinstance(cards, list)
+    assert len(cards) == 1
+    assert isinstance(cards[0], CustomCard)
+    assert cards[0].title == "Knight"
+    assert cards[0].points == 5
+
+
+def test_parse_include_empty_glossary_flag(parser):
+    """Тест отключения пустого глоссария в выводе."""
+    raw = '[{"id": "1", "translated_text": "Привет"}]'
+    result = parser.parse(raw, include_empty_glossary=False)
+    assert "suggested_glossary_terms" not in result
+    assert "batch" in result

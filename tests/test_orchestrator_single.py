@@ -46,3 +46,25 @@ async def test_execute_single_with_batch_response(mock_provider):
 
     result = await orchestrator.execute_single("Hello")
     assert result == "Batch Response"
+
+
+@pytest.mark.asyncio
+async def test_execute_single_with_dict_and_generic_container(mock_provider):
+    """Проверка извлечения текста из словарей с универсальными полями items и content."""
+    orchestrator = Orchestrator(mock_provider)
+
+    mock_provider.execute.return_value = {"items": [{"content": "Generic Response"}]}
+
+    result = await orchestrator.execute_single("Hello")
+    assert result == "Generic Response"
+
+
+@pytest.mark.asyncio
+async def test_execute_single_with_dict_direct_result(mock_provider):
+    """Проверка извлечения текста из верхнеуровневого словаря с полем output."""
+    orchestrator = Orchestrator(mock_provider)
+
+    mock_provider.execute.return_value = {"output": "Direct Output"}
+
+    result = await orchestrator.execute_single("Hello")
+    assert result == "Direct Output"

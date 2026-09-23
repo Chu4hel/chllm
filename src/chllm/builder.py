@@ -25,6 +25,7 @@ class PromptBuilder:
         context: list[str] | None = None,
         instruction: str | list[str] | None = None,
         data_label: str = "INPUT DATA",
+        context_label: str = "CONTEXT",
     ) -> str:
         """Собирает финальный текст промпта.
 
@@ -33,6 +34,7 @@ class PromptBuilder:
             context: Список строк контекста (предыдущие события/диалоги).
             instruction: Дополнительная инструкция (строка) или список инструкций.
             data_label: Заголовок для блока данных в промпте.
+            context_label: Заголовок для блока контекста в промпте.
 
         Returns:
             str: Сформированный текст промпта.
@@ -55,7 +57,7 @@ class PromptBuilder:
 
         # 2. Контекст
         if context:
-            parts.append("\n--- CONTEXT ---")
+            parts.append(f"\n--- {context_label} ---")
             parts.append("\n".join(context))
 
         # 3. Данные (JSON)

@@ -70,3 +70,10 @@ def test_builder_with_mock_input():
     assert "INPUT DATA" in prompt
     # Проверяем, что мок преобразовался в строку (представление мока)
     assert "MagicMock" in prompt
+
+
+def test_builder_custom_context_label(builder):
+    """Тест использования кастомного заголовка контекста."""
+    result = builder.build(input_data={}, context=["История сообщений"], context_label="CHAT HISTORY")
+    assert "--- CHAT HISTORY ---" in result
+    assert "История сообщений" in result

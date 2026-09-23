@@ -199,12 +199,14 @@ response = await orchestrator.execute_single("Объясни квантовую 
 from chllm import AsyncBatchProcessor
 
 processor = AsyncBatchProcessor(
-    concurrency_limit=5,          # Не более 5 одновременных запросов
-    delay_between_requests=0.1,   # Пауза между запусками задач
+    concurrency_limit=5,  # Не более 5 одновременных запросов
+    delay_between_requests=0.1,  # Пауза между запусками задач
 )
+
 
 async def translate_text(text: str) -> str:
     return await orchestrator.execute_single(f"Переведи на английский: {text}")
+
 
 items = ["Привет", "Как дела?", "Мир технологий"]
 results = await processor.process(items, translate_text, return_exceptions=True)

@@ -1,6 +1,6 @@
 [project]
 name = "chllm"
-version = "0.2.0"
+version = "0.2.1"
 description = "Отказоустойчивый Python фреймворк для взаимодействия с LLM, валидации Pydantic и надежного парсинга структурированных ответов."
 authors = [{ name = "Chu4hel", email = "sergeiivanov636@gmail.com" }]
 license = "MIT"

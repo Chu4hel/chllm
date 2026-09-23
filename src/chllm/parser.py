@@ -5,7 +5,7 @@
 
 import json
 from collections.abc import AsyncIterable, AsyncIterator, Mapping, Sequence
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 from ._json_repair import (
     ToolCall,
@@ -197,6 +197,28 @@ class RobustLLMParser:
 
         return result
 
+    @overload
+    def parse_items(
+        self,
+        raw_text: str,
+        validation_model: type[T],
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> list[T]: ...
+
+    @overload
+    def parse_items(
+        self,
+        raw_text: str,
+        validation_model: None = None,
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> list[dict[str, Any]]: ...
+
     def parse_items(
         self,
         raw_text: str,
@@ -205,7 +227,7 @@ class RobustLLMParser:
         container_key: str | None = None,
         container_keys: str | Sequence[str] | None = None,
         field_aliases: Mapping[str, str] | None = None,
-    ) -> list[T | dict[str, Any]]:
+    ) -> Any:
         """Парсит ответ нейросети и сразу возвращает список элементов.
 
         Удобный метод-обертка для прямого получения списка валидированных сущностей
@@ -232,6 +254,28 @@ class RobustLLMParser:
         )
         return parsed.get(out_key, [])
 
+    @overload
+    def parse_stream(
+        self,
+        stream: AsyncIterable[str],
+        validation_model: type[T],
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> AsyncIterator[T]: ...
+
+    @overload
+    def parse_stream(
+        self,
+        stream: AsyncIterable[str],
+        validation_model: None = None,
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]: ...
+
     async def parse_stream(
         self,
         stream: AsyncIterable[str],
@@ -240,7 +284,7 @@ class RobustLLMParser:
         container_key: str | None = None,
         container_keys: str | Sequence[str] | None = None,
         field_aliases: Mapping[str, str] | None = None,
-    ) -> AsyncIterator[T | dict[str, Any]]:
+    ) -> AsyncIterator[Any]:
         """Асинхронно парсит поток текста от LLM, выдавая готовые элементы по мере поступления.
 
         Извлекает и валидирует завершенные объекты JSON в реальном времени,

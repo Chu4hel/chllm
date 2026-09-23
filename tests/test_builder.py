@@ -77,3 +77,16 @@ def test_builder_custom_context_label(builder):
     result = builder.build(input_data={}, context=["История сообщений"], context_label="CHAT HISTORY")
     assert "--- CHAT HISTORY ---" in result
     assert "История сообщений" in result
+
+
+def test_builder_with_response_model(builder):
+    """Тест автоматического добавления схемы модели в промпт."""
+
+    class TargetOutput(BaseModel):
+        summary: str
+        score: int
+
+    prompt = builder.build(input_data={"raw": "text"}, response_model=TargetOutput)
+    assert "ОТВЕТ ДОЛЖЕН БЫТЬ СТРОГО В ФОРМАТЕ JSON" in prompt
+    assert '"summary"' in prompt
+    assert '"score"' in prompt

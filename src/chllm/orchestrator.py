@@ -5,12 +5,14 @@
 
 import asyncio
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
-from .exceptions import ContentBlockedError, RateLimitError, ServiceUnavailableError
+from .exceptions import ContentBlockedError, ParsingError, RateLimitError, ServiceUnavailableError
 from .utils import split_batch
+
+T = TypeVar("T")
 
 try:
     from chutils.logger import setup_logger
@@ -167,6 +169,78 @@ class Orchestrator:
         except Exception as e:
             self._logger.error("Ошибка при выполнении одиночного запроса: %s", e)
             return ""
+
+    async def execute_structured(
+        self,
+        prompt: str,
+        response_model: type[T],
+        *,
+        max_correction_retries: int = 2,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> list[T]:
+        """Выполняет структурированный запрос с автоматическим циклом самоисправления (Self-Correction).
+
+        Если модель вернула ответ, не прошедший валидацию Pydantic или содержащий битую структуру,
+        оркестратор делает повторный запрос с описанием ошибки валидации и просьбой исправить JSON.
+
+        Args:
+            prompt: Исходный текст промпта.
+            response_model: Pydantic-модель для валидации элементов.
+            max_correction_retries: Максимальное количество попыток самоисправления.
+            container_key: Имя целевого контейнера (если есть).
+            container_keys: Список допустимых ключей контейнера.
+            field_aliases: Маппинг алиасов полей.
+
+        Returns:
+            Список валидированных объектов целевой модели.
+
+        Raises:
+            ParsingError: Если после всех попыток коррекции не удалось получить валидные данные.
+        """
+        from .parser import RobustLLMParser
+
+        parser = RobustLLMParser(logger=self._logger)
+        current_prompt = prompt
+        last_response_text = ""
+
+        for correction_attempt in range(max_correction_retries + 1):
+            response_text = await self.execute_single(current_prompt)
+            last_response_text = response_text
+
+            items = parser.parse_items(
+                response_text,
+                validation_model=response_model,
+                container_key=container_key,
+                container_keys=container_keys,
+                field_aliases=field_aliases,
+            )
+
+            if items:
+                return items
+
+            # Если элементы не найдены или не прошли валидацию, готовим запрос на исправление
+            if correction_attempt < max_correction_retries:
+                self._logger.warning(
+                    "Ответ LLM не прошел валидацию структуры %s. Попытка исправления %d/%d.",
+                    getattr(response_model, "__name__", str(response_model)),
+                    correction_attempt + 1,
+                    max_correction_retries,
+                )
+                current_prompt = (
+                    f"{prompt}\n\n"
+                    f"--- ПРЕДЫДУЩИЙ ОТВЕТ СОДЕРЖАЛ ОШИБКУ ---\n"
+                    f"Твой предыдущий ответ не удалось распарсить или он не соответствовал схеме:\n"
+                    f"```\n{response_text[:1000]}\n```\n"
+                    f"Пожалуйста, исправь ошибки и верни СТРОГО валидный JSON в соответствии со схемой."
+                )
+
+        raise ParsingError(
+            f"Не удалось распарсить валидные элементы модели "
+            f"{getattr(response_model, '__name__', str(response_model))} после "
+            f"{max_correction_retries + 1} попыток. Последний ответ: {last_response_text[:300]}"
+        )
 
     async def _execute_with_retries(self, data: Any) -> Any:
         """Внутренний цикл выполнения запроса с ретраями."""

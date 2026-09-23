@@ -14,6 +14,7 @@ from .masking import ContentMasker, MaskedResult
 from .metrics import TokenCounter, UsageMetrics
 from .orchestrator import AgentOrchestrator, LLMProvider, Orchestrator, RetryStrategy
 from .parser import RobustLLMParser
+from .providers import GenericCallableProvider, OpenAICompatibleProvider
 
 __all__ = [
     "AgentOrchestrator",
@@ -23,9 +24,11 @@ __all__ = [
     "ContentMasker",
     "ContextBuilder",
     "ContextItem",
+    "GenericCallableProvider",
     "InvalidRequestError",
     "LLMProvider",
     "MaskedResult",
+    "OpenAICompatibleProvider",
     "Orchestrator",
     "ParsingError",
     "PromptBuilder",

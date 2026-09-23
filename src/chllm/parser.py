@@ -5,7 +5,7 @@
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterable, AsyncIterator, Mapping, Sequence
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -234,6 +234,50 @@ class RobustLLMParser:
             include_empty_glossary=False,
         )
         return parsed.get(out_key, [])
+
+    async def parse_stream(
+        self,
+        stream: AsyncIterable[str],
+        validation_model: type[T] | None = None,
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> AsyncIterator[T | dict[str, Any]]:
+        """Асинхронно парсит поток текста от LLM, выдавая готовые элементы по мере поступления.
+
+        Извлекает и валидирует завершенные объекты JSON в реальном времени,
+        не дожидаясь завершения всего ответа нейросети.
+
+        Args:
+            stream: Асинхронный итератор чанков текста (токенов).
+            validation_model: Опциональная Pydantic-модель для элементов.
+            container_key: Имя целевого контейнера.
+            container_keys: Список допустимых ключей контейнера или одиночный ключ.
+            field_aliases: Маппинг алиасов полей.
+
+        Yields:
+            Валидированные объекты модели (или словари) по мере их завершения в потоке.
+        """
+        accumulated_text = ""
+        yielded_count = 0
+
+        async for chunk in stream:
+            accumulated_text += chunk
+            # Пробуем распарсить накопленный текст
+            items = self.parse_items(
+                accumulated_text,
+                validation_model=validation_model,
+                container_key=container_key,
+                container_keys=container_keys,
+                field_aliases=field_aliases,
+            )
+
+            # Если появились новые завершенные элементы
+            if len(items) > yielded_count:
+                for new_item in items[yielded_count:]:
+                    yield new_item
+                yielded_count = len(items)
 
     def _find_json_blocks(self, text: str) -> list[str]:
         """Находит все сбалансированные JSON-блоки ({...} или [...]) в тексте."""

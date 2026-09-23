@@ -43,33 +43,41 @@ uv add "chllm[all]"
 
 ### 1. RobustLLMParser (`chllm.parser`)
 Интеллектуальный парсер, способный извлекать и восстанавливать данные даже из поврежденных ответов:
+- **Zero-Config Fallback**: автоматически инспектирует структуру полей Pydantic-модели и находит нужный массив объектов, даже если модель вернула неожиданное имя ключа.
+- **Универсальные контейнеры**: поддержка явных параметров `container_key` и `container_keys` (например, `items`, `cards`, `dialogues`).
 - **Стековое восстановление (Deep Recovery)**: автоматически достраивает незакрытые скобки, кавычки и массивы в оборванном JSON.
 - **Извлечение из Markdown**: находит JSON-блоки внутри пояснительного текста или рассуждений модели.
-- **JSON Lines Fallback**: если модель прислала поток несоединенных JSON-объектов, парсер автоматически объединит их в единый список/батч.
-- **Интеграция с Pydantic**: строгая валидация и приведение к типам моделей на лету.
+- **Потоковый парсинг (`parse_stream`)**: асинхронный разбор чанков текста в реальном времени до завершения ответа модели.
+- **Быстрый парсинг (`parse_items`)**: возвращает готовый типизированный `list[T]` без необходимости ручной распаковки словаря.
 - **Tool Use Parsing**: метод `parse_tool_calls` находит структурированные вызовы инструментов.
 
 ### 2. Orchestrator & AgentOrchestrator (`chllm.orchestrator`)
 Двигатель выполнения запросов с адаптивным поведением:
+- **Цикл самоисправления (`execute_structured`)**: при ошибках валидации Pydantic автоматически формирует запрос на исправление и повторяет вызов до успеха.
 - **Бинарное деление батчей (Batch Splitting)**: при возникновении ошибок размера или цензуры рекурсивно делит батч, изолируя сбойный элемент.
 - **Умная стратегия повторов (RetryStrategy)**: экспоненциальная задержка с рандомизированным джиттером для защиты от перегрузки API.
-- **Одиночные запросы**: метод `execute_single(prompt)` для удобного выполнения утилитарных задач.
-- **Агентный цикл (`AgentOrchestrator`)**: метод `execute_loop` берет на себя цикл "запрос -> парсинг инструментов -> выполнение -> возврат результата".
+- **Одиночные запросы (`execute_single`)**: универсальное извлечение текста из любых контейнеров (`dict` или объектов) и полей (`content`, `text`, `message`, `output` и др.).
+- **Агентный цикл (`AgentOrchestrator`)**: метод `execute_tools` берет на себя выполнение вызовов инструментов.
 
-### 3. ContentMasker (`chllm.masking`)
+### 3. Провайдеры-адаптеры (`chllm.providers`)
+Готовые провайдеры для быстрого старта с протоколом `LLMProvider`:
+- `GenericCallableProvider`: оборачивает любую функцию или корутину `async def (payload) -> response`.
+- `OpenAICompatibleProvider`: адаптер для любых OpenAI-совместимых клиентов (`AsyncOpenAI`, LiteLLM, vLLM, Ollama, DeepSeek).
+
+### 4. Prompt & Context Builders (`chllm.builder`, `chllm.context`)
+- `PromptBuilder`: динамическая сборка промптов, контекста и данных, а также автоматическая генерация инструкций со строгой JSON-схемой из Pydantic-моделей (`response_model`).
+- `ContextBuilder`: управление цепочкой контекста диалогов (Chain Context / Full Context).
+
+### 5. ContentMasker (`chllm.masking`)
 Защита системного синтаксиса и чувствительных участков текста:
 - Маскирует переменные (например, `[MCname]`, `%(user)s`, `{b}...{/b}`) в плейсхолдеры вида `[[[VAR_0]]]`.
 - Модель видит структуру предложения, но физически не может повредить или перевести системные теги.
 - Корректная сортировка паттернов по длине для предотвращения коллизий.
 
-### 4. Metrics & Token Estimation (`chllm.metrics`)
+### 6. Metrics & Token Estimation (`chllm.metrics`)
 Контроль расхода токенов:
 - `TokenCounter`: поддержка эвристического расчета для русского и английского языков, а также токенизатора `tiktoken`.
 - `estimate_completion_tokens`: прогнозирование объема ответа с учетом коэффициента языкового расширения и оверхеда схемы.
-
-### 5. Context & Prompt Builders (`chllm.builder`, `chllm.context`)
-- `PromptBuilder`: динамическая сборка системных промптов, контекста и пользовательских полезных нагрузок.
-- `ContextBuilder`: управление скользящей цепочкой контекста диалогов (Chain Context).
 
 ---
 
@@ -117,6 +125,46 @@ masked = masker.mask(text)
 
 demasked = masker.demask(translated_text, masked.mapping)
 # demasked -> "Hello, [player_name]! Press {b}Start{/b}."
+```
+
+### Структурированный запрос с самоисправлением (Self-Correction)
+
+```python
+from pydantic import BaseModel
+from chllm import GenericCallableProvider, Orchestrator, PromptBuilder
+
+
+class Card(BaseModel):
+    title: str
+    points: int
+
+
+# Генерируем промпт со строгой JSON-схемой модели
+builder = PromptBuilder()
+prompt = builder.build(
+    input_data={"theme": "Фэнтези"},
+    response_model=Card,
+)
+
+# Оборачиваем функцию вызова API
+provider = GenericCallableProvider(my_async_llm_function)
+orchestrator = Orchestrator(provider)
+
+# При повреждении JSON или ошибке валидации оркестратор автоматически сделает репромпт
+cards = await orchestrator.execute_structured(prompt, response_model=Card)
+# cards -> [Card(title="Рыцарь", points=10), ...]
+```
+
+### Потоковый парсинг в реальном времени (Streaming Parser)
+
+```python
+from chllm import RobustLLMParser
+
+parser = RobustLLMParser()
+
+# Получаем готовые объекты прямо во время генерации токенов
+async for card in parser.parse_stream(my_token_stream, validation_model=Card):
+    print(f"Новая карточка: {card.title} ({card.points} очков)")
 ```
 
 ### Оркестратор запросов с ретраями

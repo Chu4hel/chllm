@@ -21,7 +21,9 @@ from .exceptions import (
     CliToolError,
     ContentBlockedError,
     InvalidRequestError,
+    LocationUnsupportedError,
     ParsingError,
+    ProxyConnectionError,
     QuotaExceededError,
     RateLimitError,
     ServiceUnavailableError,
@@ -35,7 +37,13 @@ from .masking import ContentMasker, MaskedResult
 from .metrics import TokenCounter, UsageMetrics
 from .orchestrator import AgentOrchestrator, LLMProvider, Orchestrator, RetryStrategy
 from .parser import RobustLLMParser, ToolCall
-from .providers import GenericCallableProvider, OpenAICompatibleProvider
+from .providers import (
+    GeminiThinkingConfig,
+    GenericCallableProvider,
+    GoogleGenAIProvider,
+    OpenAICompatibleProvider,
+    model_supports_thinking,
+)
 from .skills import (
     FileSystemSkillSource,
     InMemorySkillSource,
@@ -71,18 +79,22 @@ __all__ = [
     "ConversationPool",
     "FileSystemSkillSource",
     "ForkMode",
+    "GeminiThinkingConfig",
     "GenericCallableProvider",
+    "GoogleGenAIProvider",
     "ISessionStorage",
     "ISkillSource",
     "InMemorySessionStorage",
     "InMemorySkillSource",
     "InvalidRequestError",
     "LLMProvider",
+    "LocationUnsupportedError",
     "MaskedResult",
     "OpenAICompatibleProvider",
     "Orchestrator",
     "ParsingError",
     "PromptBuilder",
+    "ProxyConnectionError",
     "QuotaExceededError",
     "RateLimitError",
     "RetryStrategy",
@@ -104,4 +116,5 @@ __all__ = [
     "ToolCall",
     "TriggerRegistry",
     "UsageMetrics",
+    "model_supports_thinking",
 ]

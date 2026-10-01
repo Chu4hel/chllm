@@ -35,7 +35,7 @@ from .exceptions import (
     SkillNotFoundError,
     SkillValidationError,
 )
-from .masking import ContentMasker, MaskedResult
+from .masking import ContentMasker, MaskedResult, MaskingPreset, MaskingPresets
 from .metrics import TokenCounter, UsageMetrics
 from .orchestrator import AgentOrchestrator, LLMProvider, Orchestrator, RetryStrategy
 from .parser import RobustLLMParser, ToolCall
@@ -106,6 +106,8 @@ __all__ = [
     "LocationUnsupportedError",
     "MapReduceConfig",
     "MaskedResult",
+    "MaskingPreset",
+    "MaskingPresets",
     "NoActiveKeysError",
     "OpenAICompatibleProvider",
     "OpenAIRouterProvider",

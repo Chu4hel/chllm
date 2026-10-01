@@ -10,6 +10,7 @@ from .agentic import (
 )
 from .batch_processor import AsyncBatchProcessor, BatchItemResult
 from .builder import PromptBuilder
+from .chunker import ChunkingConfig, TextChunker, TokenChunker
 from .context import ContextBuilder, ContextItem
 from .exceptions import (
     AgenticError,
@@ -72,6 +73,7 @@ __all__ = [
     "AuthenticationError",
     "BatchItemResult",
     "CHLLMError",
+    "ChunkingConfig",
     "CliInputMode",
     "CliNotFoundError",
     "CliProcessError",
@@ -124,7 +126,9 @@ __all__ = [
     "SkillRegistry",
     "SkillValidationError",
     "SkillValidator",
+    "TextChunker",
     "TextCommandTrigger",
+    "TokenChunker",
     "TokenCounter",
     "ToolCall",
     "TriggerRegistry",

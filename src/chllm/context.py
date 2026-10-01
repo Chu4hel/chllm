@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .chunker import ChunkingConfig, TextChunker, TokenChunker
+
 
 @dataclass
 class ContextItem:
@@ -81,3 +83,12 @@ class ContextBuilder:
     def _default_formatter(item: Any) -> str:
         """Стандартный форматтер: преобразует данные в строку."""
         return str(item)
+
+
+__all__ = [
+    "ChunkingConfig",
+    "ContextBuilder",
+    "ContextItem",
+    "TextChunker",
+    "TokenChunker",
+]

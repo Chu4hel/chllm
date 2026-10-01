@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import logging
+import logging  # chutils: ignore[ChutilsIntegrationRule]
 import re
 from typing import Any, NoReturn
 
@@ -25,7 +25,14 @@ try:
 except ImportError:
 
     def setup_logger(name: str = "chllm.providers.google_genai") -> Any:
-        """Создает резервный логгер, если chutils не установлен."""
+        """Создает резервный логгер, если chutils не установлен.
+
+        Args:
+            name: Имя логгера.
+
+        Returns:
+            Экземпляр логгера logging.Logger.
+        """
         return logging.getLogger(name)
 
 
@@ -256,6 +263,9 @@ class GoogleGenAIProvider:
             AuthenticationError: При недействительном API-ключе.
             ContentBlockedError: При срабатывании фильтров безопасности.
             CHLLMError: При прочих ошибках API.
+
+        Returns:
+            Ничего не возвращает (всегда возбуждает типизированное исключение NoReturn).
         """
         # 1. Если это таймаут или прерывание запроса
         if isinstance(e, (asyncio.TimeoutError, TimeoutError, asyncio.CancelledError)):

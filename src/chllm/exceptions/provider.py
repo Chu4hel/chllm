@@ -25,6 +25,11 @@ class QuotaExceededError(CHLLMError):
 class ServiceUnavailableError(CHLLMError):
     """Сервер LLM временно недоступен или перегружен (Error 503/504)."""
 
+    def __init__(self, message: str, retry_delay: float = 30.0) -> None:
+        super().__init__(message)
+        self.retry_delay: float = retry_delay
+        "Задержка в секундах перед следующей попыткой"
+
 
 class AuthenticationError(CHLLMError):
     """Ошибка аутентификации (неверный API ключ)."""
@@ -32,3 +37,11 @@ class AuthenticationError(CHLLMError):
 
 class ContentBlockedError(CHLLMError):
     """Запрос или ответ заблокирован фильтрами безопасности провайдера."""
+
+
+class LocationUnsupportedError(CHLLMError):
+    """Блокировка доступа по географическому региону (User location is not supported)."""
+
+
+class ProxyConnectionError(CHLLMError):
+    """Сбой подключения к прокси-серверу или ошибка сетевого протокола LLM."""

@@ -17,7 +17,13 @@ if TYPE_CHECKING:
     from .skills.registry import SkillRegistry
     from .triggers.registry import TriggerRegistry
 
-from .exceptions import ContentBlockedError, ParsingError, RateLimitError, ServiceUnavailableError
+from .exceptions import (
+    ContentBlockedError,
+    ParsingError,
+    ProxyConnectionError,
+    RateLimitError,
+    ServiceUnavailableError,
+)
 from .utils import split_batch
 
 T = TypeVar("T")
@@ -77,7 +83,13 @@ class RetryStrategy:
     max_delay: float = 60.0
     exponential_base: float = 2.0
     use_jitter: bool = True
-    retryable_errors: tuple[type[Exception], ...] = (RateLimitError, ServiceUnavailableError, ConnectionError)
+    respect_retry_delay: bool = False
+    retryable_errors: tuple[type[Exception], ...] = (
+        RateLimitError,
+        ServiceUnavailableError,
+        ConnectionError,
+        ProxyConnectionError,
+    )
 
 
 class Orchestrator:
@@ -272,12 +284,22 @@ class Orchestrator:
                     self._logger.error("Все попытки исчерпаны. Последняя ошибка: %s", e)
                     raise
 
-                # Расчет задержки с учетом экспоненциального роста и джиттера
-                delay = min(
-                    self._strategy.base_delay * (self._strategy.exponential_base**attempt), self._strategy.max_delay
-                )
-                if self._strategy.use_jitter:
-                    delay = delay * random.uniform(0.8, 1.2)
+                # Расчет задержки: учитываем server retry_delay из ошибки при включенном respect_retry_delay
+                server_delay = getattr(e, "retry_delay", None)
+                if (
+                    self._strategy.respect_retry_delay
+                    and server_delay is not None
+                    and isinstance(server_delay, (int, float))
+                    and server_delay > 0
+                ):
+                    delay = min(float(server_delay), self._strategy.max_delay)
+                else:
+                    delay = min(
+                        self._strategy.base_delay * (self._strategy.exponential_base**attempt),
+                        self._strategy.max_delay,
+                    )
+                    if self._strategy.use_jitter:
+                        delay = delay * random.uniform(0.8, 1.2)
 
                 self._logger.warning(
                     "Ошибка при вызове LLM (%s). Попытка %d/%d через %.1fс.",

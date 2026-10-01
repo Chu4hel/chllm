@@ -9,6 +9,8 @@ from .parsing import InvalidRequestError, ParsingError
 from .provider import (
     AuthenticationError,
     ContentBlockedError,
+    LocationUnsupportedError,
+    ProxyConnectionError,
     QuotaExceededError,
     RateLimitError,
     ServiceUnavailableError,
@@ -26,7 +28,9 @@ __all__ = [
     "CliToolError",
     "ContentBlockedError",
     "InvalidRequestError",
+    "LocationUnsupportedError",
     "ParsingError",
+    "ProxyConnectionError",
     "QuotaExceededError",
     "RateLimitError",
     "ServiceUnavailableError",

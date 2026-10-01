@@ -303,5 +303,5 @@ class TextChunker:
         return batches
 
 
-# Псевдоним для удобства
 TokenChunker = TextChunker
+"""Псевдоним для TextChunker."""

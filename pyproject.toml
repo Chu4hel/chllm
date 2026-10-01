@@ -15,10 +15,12 @@ dependencies = [
 chutils = ["chutils>=3.5.0"]
 tokens = ["tiktoken>=0.7.0"]
 gemini = ["google-genai>=0.1.0"]
+router = ["httpx>=0.27.0"]
 all = [
     "chutils>=3.5.0",
     "tiktoken>=0.7.0",
     "google-genai>=0.1.0",
+    "httpx>=0.27.0",
 ]
 
 [dependency-groups]
@@ -29,6 +31,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.10.0",
     "chutils[rich]>=3.5.0",
+    "httpx>=0.27.0",
 ]
 
 [tool.hatch.build.targets.wheel]

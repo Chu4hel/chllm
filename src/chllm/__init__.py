@@ -42,6 +42,7 @@ from .providers import (
     GenericCallableProvider,
     GoogleGenAIProvider,
     OpenAICompatibleProvider,
+    OpenAIRouterProvider,
     model_supports_thinking,
 )
 from .skills import (
@@ -55,6 +56,7 @@ from .skills import (
 )
 from .tools import CliInputMode, CliTool, CliToolConfig
 from .triggers import TextCommandTrigger, TriggerRegistry
+from .utils import mask_proxy_url, split_batch
 
 __all__ = [
     "AgentMessage",
@@ -91,6 +93,7 @@ __all__ = [
     "LocationUnsupportedError",
     "MaskedResult",
     "OpenAICompatibleProvider",
+    "OpenAIRouterProvider",
     "Orchestrator",
     "ParsingError",
     "PromptBuilder",
@@ -116,5 +119,6 @@ __all__ = [
     "ToolCall",
     "TriggerRegistry",
     "UsageMetrics",
+    "mask_proxy_url",
     "model_supports_thinking",
 ]

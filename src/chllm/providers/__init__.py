@@ -11,11 +11,13 @@ from .google_genai import (
     model_supports_thinking,
 )
 from .openai import OpenAICompatibleProvider
+from .router import OpenAIRouterProvider
 
 __all__ = [
     "GeminiThinkingConfig",
     "GenericCallableProvider",
     "GoogleGenAIProvider",
     "OpenAICompatibleProvider",
+    "OpenAIRouterProvider",
     "model_supports_thinking",
 ]

@@ -398,6 +398,7 @@ dependencies = [
 all = [
     { name = "chutils" },
     { name = "google-genai" },
+    { name = "httpx" },
     { name = "tiktoken" },
 ]
 chutils = [
@@ -406,6 +407,9 @@ chutils = [
 gemini = [
     { name = "google-genai" },
 ]
+router = [
+    { name = "httpx" },
+]
 tokens = [
     { name = "tiktoken" },
 ]
@@ -413,6 +417,7 @@ tokens = [
 [package.dev-dependencies]
 dev = [
     { name = "chutils", extra = ["rich"] },
+    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -426,16 +431,19 @@ requires-dist = [
     { name = "chutils", marker = "extra == 'chutils'", specifier = ">=3.5.0" },
     { name = "google-genai", marker = "extra == 'all'", specifier = ">=0.1.0" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=0.1.0" },
+    { name = "httpx", marker = "extra == 'all'", specifier = ">=0.27.0" },
+    { name = "httpx", marker = "extra == 'router'", specifier = ">=0.27.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tiktoken", marker = "extra == 'all'", specifier = ">=0.7.0" },
     { name = "tiktoken", marker = "extra == 'tokens'", specifier = ">=0.7.0" },
 ]
-provides-extras = ["chutils", "tokens", "gemini", "all"]
+provides-extras = ["chutils", "tokens", "gemini", "router", "all"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "chutils", extras = ["rich"], specifier = ">=3.5.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "mypy", specifier = ">=1.10.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },

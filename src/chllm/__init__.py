@@ -9,7 +9,7 @@ from .agentic import (
     SessionSnapshot,
 )
 from .batch_processor import AsyncBatchProcessor, BatchItemResult
-from .builder import PromptBuilder
+from .builder import FewShotExample, PromptBuilder
 from .chunker import ChunkingConfig, TextChunker, TokenChunker
 from .context import ContextBuilder, ContextItem
 from .exceptions import (
@@ -88,6 +88,7 @@ __all__ = [
     "ContextBuilder",
     "ContextItem",
     "ConversationPool",
+    "FewShotExample",
     "FileSystemSkillSource",
     "ForkMode",
     "GeminiThinkingConfig",

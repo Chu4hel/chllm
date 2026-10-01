@@ -1,7 +1,18 @@
+from .agentic import (
+    AgentMessage,
+    AgentSession,
+    ConversationPool,
+    ForkMode,
+    InMemorySessionStorage,
+    ISessionStorage,
+    SessionMessageBus,
+    SessionSnapshot,
+)
 from .batch_processor import AsyncBatchProcessor, BatchItemResult
 from .builder import PromptBuilder
 from .context import ContextBuilder, ContextItem
 from .exceptions import (
+    AgenticError,
     AuthenticationError,
     CHLLMError,
     CliNotFoundError,
@@ -14,6 +25,8 @@ from .exceptions import (
     QuotaExceededError,
     RateLimitError,
     ServiceUnavailableError,
+    SessionNotFoundError,
+    SessionTimeoutError,
     SkillError,
     SkillNotFoundError,
     SkillValidationError,
@@ -35,7 +48,10 @@ from .skills import (
 from .tools import CliInputMode, CliTool, CliToolConfig
 
 __all__ = [
+    "AgentMessage",
     "AgentOrchestrator",
+    "AgentSession",
+    "AgenticError",
     "AsyncBatchProcessor",
     "AuthenticationError",
     "BatchItemResult",
@@ -51,9 +67,13 @@ __all__ = [
     "ContentMasker",
     "ContextBuilder",
     "ContextItem",
+    "ConversationPool",
     "FileSystemSkillSource",
+    "ForkMode",
     "GenericCallableProvider",
+    "ISessionStorage",
     "ISkillSource",
+    "InMemorySessionStorage",
     "InMemorySkillSource",
     "InvalidRequestError",
     "LLMProvider",
@@ -67,6 +87,10 @@ __all__ = [
     "RetryStrategy",
     "RobustLLMParser",
     "ServiceUnavailableError",
+    "SessionMessageBus",
+    "SessionNotFoundError",
+    "SessionSnapshot",
+    "SessionTimeoutError",
     "SkillDefinition",
     "SkillError",
     "SkillMetadata",

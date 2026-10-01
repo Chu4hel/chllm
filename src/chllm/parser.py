@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import re
 from collections.abc import AsyncIterable, AsyncIterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
@@ -15,8 +17,12 @@ if TYPE_CHECKING:
 from ._json_repair import (
     ToolCall,
     attempt_json_recovery,
+    calculate_model_match_score,
     clean_markdown,
+    extract_tool_calls,
     find_json_blocks,
+    find_matching_list,
+    sanitize_json_text,
 )
 
 try:
@@ -48,7 +54,15 @@ class RobustLLMParser:
         self,
         logger: Any | None = None,
         default_container_key: str = "batch",
-        default_container_aliases: Sequence[str] = ("batch", "items", "data", "results"),
+        default_container_aliases: Sequence[str] = (
+            "batch",
+            "items",
+            "data",
+            "results",
+            "options",
+            "declensions",
+            "words",
+        ),
         field_aliases: Mapping[str, str] | None = None,
     ):
         """Инициализирует парсер ответов от LLM.
@@ -65,11 +79,32 @@ class RobustLLMParser:
         self._field_aliases = (
             dict(field_aliases)
             if field_aliases is not None
-            else {
-                "text": "translated_text",
-                "verification_prefix": "v",
-            }
+            else {"text": "translated_text", "verification_prefix": "v"}
         )
+
+    def _get_candidate_keys(
+        self,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+    ) -> list[str]:
+        """Формирует упорядоченный список ключей-кандидатов для контейнера данных."""
+        candidates: list[str] = []
+        if container_key:
+            candidates.append(container_key)
+        if container_keys:
+            if isinstance(container_keys, str):
+                if container_keys not in candidates:
+                    candidates.append(container_keys)
+            else:
+                for k in container_keys:
+                    if k not in candidates:
+                        candidates.append(k)
+
+        for k in self._default_container_aliases:
+            if k not in candidates:
+                candidates.append(k)
+
+        return candidates
 
     def parse(
         self,
@@ -100,37 +135,23 @@ class RobustLLMParser:
             и глоссарием.
         """
         out_key = container_key or self._default_container_key
-
         if not raw_text or not raw_text.strip():
-            result_empty: dict[str, list[T | dict[str, Any]]] = {out_key: []}
+            empty: dict[str, list[T | dict[str, Any]]] = {out_key: []}
             if include_empty_glossary or glossary_model:
-                result_empty[glossary_key] = []
-            return result_empty
+                empty[glossary_key] = []
+            return empty
 
-        # Вычисляем список ключей-кандидатов для контейнера
-        candidate_keys: list[str] = []
-        if container_key:
-            candidate_keys.append(container_key)
-        if container_keys:
-            if isinstance(container_keys, str):
-                if container_keys not in candidate_keys:
-                    candidate_keys.append(container_keys)
-            else:
-                for k in container_keys:
-                    if k not in candidate_keys:
-                        candidate_keys.append(k)
-
-        # Добавляем стандартные алиасы
-        for k in self._default_container_aliases:
-            if k not in candidate_keys:
-                candidate_keys.append(k)
+        candidate_keys = self._get_candidate_keys(container_key, container_keys)
 
         merged_field_aliases = dict(self._field_aliases)
         if field_aliases is not None:
             merged_field_aliases.update(field_aliases)
 
         # 1. Извлекаем все сбалансированные JSON блоки из текста
-        blocks = self._find_json_blocks(raw_text)
+        # Предварительно нормализуем типографические кавычки, чтобы строковые литералы
+        # распознавались без искажения вложенных структур
+        normalized_raw = re.sub(r"[«»“”„‟]", '"', raw_text)
+        blocks = self._find_json_blocks(normalized_raw)
 
         validated_items: list[T | dict[str, Any]] = []
         suggested_glossary_terms: list[Any] = []
@@ -161,6 +182,24 @@ class RobustLLMParser:
                     field_aliases=merged_field_aliases,
                 )
             except (json.JSONDecodeError, TypeError):
+                # Пробуем санитизировать блок (кавычки, висячие запятые)
+                sanitized_block = sanitize_json_text(block)
+                try:
+                    data = json.loads(sanitized_block)
+                    self._process_json_data(
+                        data,
+                        validated_items,
+                        suggested_glossary_terms,
+                        validation_model,
+                        glossary_model,
+                        container_keys=candidate_keys,
+                        glossary_key=glossary_key,
+                        field_aliases=merged_field_aliases,
+                    )
+                    continue
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
                 # Если блок начинается на '[' и не парсится — возможно, внутри есть мусор.
                 # Пробуем найти блоки внутри него и добавить в очередь.
                 stripped_block = block.strip()
@@ -172,7 +211,7 @@ class RobustLLMParser:
                         continue
 
                 # Попытка восстановления для каждого блока в отдельности
-                recovered = self._attempt_json_recovery(block)
+                recovered = self._attempt_json_recovery(sanitized_block)
                 try:
                     data = json.loads(recovered)
                     items_before = len(validated_items)
@@ -331,7 +370,7 @@ class RobustLLMParser:
         return find_json_blocks(text)
 
     def parse_raw(self, raw_text: str) -> object:
-        """Просто парсит JSON с восстановлением, возвращая чистый Python объект.
+        """Просто парсит JSON с санитизацией и восстановлением, возвращая чистый Python объект.
 
         Универсальный метод для любых структур данных.
 
@@ -345,8 +384,148 @@ class RobustLLMParser:
         try:
             return json.loads(clean)
         except json.JSONDecodeError:
-            recovered = self._attempt_json_recovery(clean)
-            return json.loads(recovered)
+            sanitized = sanitize_json_text(clean)
+            try:
+                return json.loads(sanitized)
+            except json.JSONDecodeError:
+                recovered = self._attempt_json_recovery(sanitized)
+                return json.loads(recovered)
+
+    @staticmethod
+    def sanitize_conversational_text(text: str) -> str:
+        """Очищает разговорный текст ответа от LLM перед парсингом JSON.
+
+        Удаляет markdown-разметку, фразы вежливости веб-чатов,
+        нормализует типографические кавычки и висячие запятые.
+
+        Args:
+            text: Исходный ответ от нейросети.
+
+        Returns:
+            Очищенный текст JSON.
+        """
+        if not text:
+            return ""
+
+        clean = clean_markdown(text)
+        return sanitize_json_text(clean)
+
+    @overload
+    def parse_conversational_response(
+        self,
+        raw_text: str,
+        validation_model: type[T],
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> list[T]: ...
+
+    @overload
+    def parse_conversational_response(
+        self,
+        raw_text: str,
+        validation_model: None = None,
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> Any: ...
+
+    def parse_conversational_response(
+        self,
+        raw_text: str,
+        validation_model: type[T] | None = None,
+        *,
+        container_key: str | None = None,
+        container_keys: str | Sequence[str] | None = None,
+        field_aliases: Mapping[str, str] | None = None,
+    ) -> Any:
+        """Парсит неструктурированный или разговорный ответ веб-чата/модели.
+
+        Устойчив к вежливости, преамбулам/постамбулам, типографическим кавычкам («», “”),
+        висячим запятым, отсутствующим внешним скобкам списков ([...]) и поврежденному JSON.
+
+        Args:
+            raw_text: Текст ответа от веб-модели или чата.
+            validation_model: Опциональная Pydantic-модель для валидации элементов.
+            container_key: Имя целевого контейнера (по умолчанию 'batch').
+            container_keys: Список допустимых ключей контейнера или одиночный ключ.
+            field_aliases: Маппинг алиасов полей.
+
+        Returns:
+            Список валидированных объектов модели (или список/словарь распарсенных данных).
+        """
+        if not raw_text or not raw_text.strip():
+            return []
+
+        out_key = container_key or self._default_container_key
+        candidate_keys = self._get_candidate_keys(container_key, container_keys)
+
+        # 1. Попытка через стандартный parse_items (с санитизацией блоков)
+        if items := self.parse_items(
+            raw_text,
+            validation_model=validation_model,
+            container_key=out_key,
+            container_keys=candidate_keys,
+            field_aliases=field_aliases,
+        ):
+            return items
+
+        # 2. Санитизация разговорного текста
+        clean_text = self.sanitize_conversational_text(raw_text)
+
+        # Попытка парсинга очищенного текста
+        parsed_data = None
+        try:
+            parsed_data = self.parse_raw(clean_text)
+        except Exception:
+            # Если это список объектов через запятую без скобок [...]
+            with contextlib.suppress(Exception):
+                parsed_data = self.parse_raw(f"[{clean_text}]")
+
+        # Если распарсить единым куском не удалось — regex-поиск всех объектов {...}
+        if parsed_data is None:
+            regex_items: list[dict[str, Any]] = []
+            for match in re.finditer(r"\{[^{}]*\}", clean_text, re.DOTALL):
+                with contextlib.suppress(Exception):
+                    if isinstance(obj := self.parse_raw(match.group(0)), dict):
+                        regex_items.append(obj)
+            if regex_items:
+                parsed_data = regex_items
+
+        if parsed_data is None:
+            return []
+
+        # Извлечение элементов из parsed_data
+        raw_items: list[Any] = []
+        if isinstance(parsed_data, list):
+            raw_items = parsed_data
+        elif isinstance(parsed_data, dict):
+            # Проверяем контейнерные ключи
+            for k in candidate_keys:
+                if k in parsed_data and isinstance(parsed_data[k], list):
+                    raw_items = parsed_data[k]
+                    break
+            else:
+                # Ищем любой список внутри словаря
+                for val in parsed_data.values():
+                    if isinstance(val, list):
+                        raw_items = val
+                        break
+                else:
+                    # Одиночный объект
+                    raw_items = [parsed_data]
+
+        # Валидация через модель при наличии
+        if validation_model:
+            validated: list[Any] = []
+            for item in raw_items:
+                if isinstance(item, dict):
+                    self._add_item(item, validated, validation_model)
+            return validated
+
+        return raw_items if raw_items else parsed_data
 
     @staticmethod
     def parse_tool_calls(
@@ -362,66 +541,10 @@ class RobustLLMParser:
         Returns:
             Дедуплицированный список объектов ToolCall.
         """
-        if not text:
-            return []
-
-        results: list[ToolCall] = []
-
-        # 1. Поиск JSON блоков вызовов инструментов
-        blocks = find_json_blocks(text)
-        for block in blocks:
-            try:
-                data = json.loads(block)
-                if not isinstance(data, dict):
-                    continue
-
-                # Поддержка оберток: "tool_use", "tool", "call", "function"
-                for wrapper in ("tool_use", "tool", "call", "function"):
-                    if wrapper in data and isinstance(data[wrapper], dict):
-                        inner = data[wrapper]
-                        if "name" in inner:
-                            data = inner
-                            break
-
-                if "name" not in data or not isinstance(data["name"], str):
-                    continue
-
-                name = data["name"]
-                args = {}
-
-                # Ищем аргументы в стандартных полях
-                for arg_field in ("args", "parameters", "arguments", "params"):
-                    if arg_field in data and isinstance(data[arg_field], dict):
-                        args = data[arg_field]
-                        break
-                else:
-                    # Плоские аргументы (все ключи кроме имени и служебных)
-                    excluded_keys = {"name", "tool_use", "tool", "call", "function"}
-                    args = {k: v for k, v in data.items() if k not in excluded_keys}
-
-                results.append(ToolCall(name=name, args=args))
-            except (json.JSONDecodeError, ValueError):
-                continue
-
-        # 2. Поиск текстовых команд триггеров
-        if triggers is not None:
-            trigger_calls = triggers.parse_triggers(text)
-            results.extend(trigger_calls)
-
-        # 3. Дедупликация вызовов (отсекаем дубликаты с одинаковым именем и аргументами)
-        seen: set[tuple[str, str]] = set()
-        deduped: list[ToolCall] = []
-        for call in results:
-            key = (call.name, json.dumps(call.args, sort_keys=True, ensure_ascii=False, default=str))
-            if key not in seen:
-                seen.add(key)
-                deduped.append(call)
-
-        return deduped
+        return extract_tool_calls(text, triggers)
 
     @staticmethod
     def _clean_markdown(text: str) -> str:
-        """Извлекает чистое содержимое JSON из текста (игнорируя болтовню нейросети)."""
         return clean_markdown(text)
 
     def _process_json_data(
@@ -457,14 +580,10 @@ class RobustLLMParser:
 
         # 1. Проверяем глоссарий
         has_glossary = False
-        if glossary_key in data and isinstance(data[glossary_key], list):
+        glos_list = data.get(glossary_key) or data.get("suggested_glossary_terms")
+        if isinstance(glos_list, list):
             has_glossary = True
-            for term_data in data[glossary_key]:
-                if isinstance(term_data, dict) and "term" in term_data:
-                    self._add_item(term_data, terms, glos_model)
-        elif "suggested_glossary_terms" in data and isinstance(data["suggested_glossary_terms"], list):
-            has_glossary = True
-            for term_data in data["suggested_glossary_terms"]:
+            for term_data in glos_list:
                 if isinstance(term_data, dict) and "term" in term_data:
                     self._add_item(term_data, terms, glos_model)
 
@@ -497,77 +616,12 @@ class RobustLLMParser:
         val_model: type[T] | None,
         glossary_keys: set[str],
     ) -> list[Any] | None:
-        """Ищет подходящий список объектов внутри словаря по полям модели.
-
-        Args:
-            data: Словарь данных верхнего уровня.
-            val_model: Опциональная модель валидации.
-            glossary_keys: Множество ключей глоссария для исключения.
-
-        Returns:
-            Найденный список объектов или None.
-        """
-        candidate_lists: list[tuple[int, list[Any]]] = []
-
-        for key, value in data.items():
-            if key in glossary_keys:
-                continue
-            if isinstance(value, list) and value:
-                # Проверяем, что элементы - словари
-                dict_entries = [e for e in value if isinstance(e, dict)]
-                if not dict_entries:
-                    continue
-
-                if val_model:
-                    match_score = self._calculate_model_match_score(dict_entries, val_model)
-                    if match_score > 0:
-                        candidate_lists.append((match_score, value))
-                else:
-                    # Без модели берем первый непустой список словарей
-                    candidate_lists.append((1, value))
-
-        if candidate_lists:
-            # Сортируем по убыванию соответствия
-            candidate_lists.sort(key=lambda x: x[0], reverse=True)
-            return candidate_lists[0][1]
-
-        return None
+        """Ищет подходящий список объектов внутри словаря по полям модели."""
+        return find_matching_list(data, val_model, glossary_keys)
 
     def _calculate_model_match_score(self, entries: list[dict[str, Any]], model: type[Any]) -> int:
         """Вычисляет оценку соответствия списка словарей модели Pydantic."""
-        model_fields: set[str] = set()
-        model_aliases: set[str] = set()
-
-        if hasattr(model, "model_fields"):
-            # Pydantic v2
-            for name, field_info in model.model_fields.items():
-                model_fields.add(name)
-                if field_info.alias:
-                    model_aliases.add(field_info.alias)
-                if getattr(field_info, "validation_alias", None):
-                    val_alias = field_info.validation_alias
-                    if isinstance(val_alias, str):
-                        model_aliases.add(val_alias)
-        elif hasattr(model, "__fields__"):
-            # Pydantic v1
-            for name, field_info in model.__fields__.items():
-                model_fields.add(name)
-                if field_info.alias:
-                    model_aliases.add(field_info.alias)
-        else:
-            return 0
-
-        target_keys = model_fields | model_aliases
-
-        # Проверяем до 3 первых записей
-        total_score = 0
-        samples = entries[:3]
-        for entry in samples:
-            entry_keys = set(entry.keys())
-            matched = entry_keys & target_keys
-            total_score += len(matched)
-
-        return total_score
+        return calculate_model_match_score(entries, model)
 
     def _process_single_entry(
         self,
@@ -641,5 +695,4 @@ class RobustLLMParser:
 
     @staticmethod
     def _attempt_json_recovery(text: str) -> str:
-        """Интеллектуально пытается восстановить поврежденный в конце JSON."""
         return attempt_json_recovery(text)

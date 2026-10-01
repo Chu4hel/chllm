@@ -6,6 +6,7 @@
 from .agentic import AgenticError, SessionNotFoundError, SessionTimeoutError
 from .base import CHLLMError
 from .parsing import InvalidRequestError, ParsingError
+from .pool import NoActiveKeysError
 from .provider import (
     AuthenticationError,
     ContentBlockedError,
@@ -29,6 +30,7 @@ __all__ = [
     "ContentBlockedError",
     "InvalidRequestError",
     "LocationUnsupportedError",
+    "NoActiveKeysError",
     "ParsingError",
     "ProxyConnectionError",
     "QuotaExceededError",

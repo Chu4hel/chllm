@@ -11,13 +11,18 @@ from .google_genai import (
     model_supports_thinking,
 )
 from .openai import OpenAICompatibleProvider
+from .pool import KeyItem, KeyPoolProvider, KeyStatus, RotationStrategy
 from .router import OpenAIRouterProvider
 
 __all__ = [
     "GeminiThinkingConfig",
     "GenericCallableProvider",
     "GoogleGenAIProvider",
+    "KeyItem",
+    "KeyPoolProvider",
+    "KeyStatus",
     "OpenAICompatibleProvider",
     "OpenAIRouterProvider",
+    "RotationStrategy",
     "model_supports_thinking",
 ]

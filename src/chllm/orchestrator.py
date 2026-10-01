@@ -3,11 +3,18 @@
 Обеспечивает отказоустойчивость, умные ретраи и автоматическое деление батчей.
 """
 
+from __future__ import annotations
+
 import asyncio
 import random
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+
+if TYPE_CHECKING:
+    from .skills.domain import SkillDefinition
+    from .skills.registry import SkillRegistry
 
 from .exceptions import ContentBlockedError, ParsingError, RateLimitError, ServiceUnavailableError
 from .utils import split_batch
@@ -311,10 +318,13 @@ class Orchestrator:
 
 
 class AgentOrchestrator(Orchestrator):
+    """Расширенный оркестратор для работы в режиме автономного агента.
+
+    Поддерживает цикл "запрос -> вызов инструментов -> результат -> запрос",
+    а также подсистему динамических навыков (Lazy Skills System).
     """
-    Расширенный оркестратор для работы в режиме автономного агента.
-    Поддерживает цикл "запрос -> вызов инструментов -> результат -> запрос".
-    """
+
+    LOAD_SKILL_PATTERN = re.compile(r"\[LOAD_SKILL:\s*([a-zA-Z0-9_-]+)\]", re.IGNORECASE)
 
     async def execute_tools(self, response_text: str, tools: dict[str, Callable]) -> str | None:
         """Анализирует текст ответа, и если найдены вызовы инструментов, выполняет их.
@@ -356,19 +366,64 @@ class AgentOrchestrator(Orchestrator):
 
         return "\n".join(results)
 
-    async def execute_loop(self, prompt: str, tools: dict[str, Callable], max_iterations: int = 5) -> str:
-        """
-        Запускает цикл автономной работы агента.
+    async def execute_loop(
+        self,
+        prompt: str,
+        tools: dict[str, Callable] | None = None,
+        max_iterations: int = 5,
+        skills: SkillRegistry | None = None,
+        preload_skills: Sequence[str] | None = None,
+    ) -> str:
+        """Запускает цикл автономной работы агента с поддержкой инструментов и динамических навыков.
 
         Args:
             prompt: Начальный промпт для ИИ.
             tools: Словарь доступных Python-функций {имя: функция}.
             max_iterations: Максимальное количество итераций (защита от зацикливания).
+            skills: Опциональный реестр навыков для ленивой загрузки.
+            preload_skills: Список имен навыков для немедленной активации (Zero-RTT).
 
         Returns:
             Финальный текстовый ответ ИИ.
         """
-        current_prompt = prompt
+        active_tools: dict[str, Callable] = dict(tools or {})
+        active_loaded_skills: dict[str, SkillDefinition] = {}
+
+        if skills is not None:
+
+            async def load_skill(name: str) -> str:
+                clean_name = name.strip()
+                if clean_name in active_loaded_skills:
+                    return f"Skill '{clean_name}' is already loaded."
+
+                skill = await skills.load_skill(clean_name)
+                if skill is None:
+                    catalog = await skills.get_catalog()
+                    avail = ", ".join(s.name for s in catalog) if catalog else "none"
+                    return f"Error: Skill '{clean_name}' not found. Available skills: {avail}"
+
+                active_loaded_skills[clean_name] = skill
+                if skill.tools:
+                    active_tools.update(skill.tools)
+                self._logger.info("Загружен навык: %s", clean_name)
+                return f"Skill '{clean_name}' successfully loaded. Follow its instructions."
+
+            active_tools["load_skill"] = load_skill
+
+            if preload_skills:
+                for skill_name in preload_skills:
+                    await load_skill(skill_name)
+
+        def _format_skills_block() -> str:
+            if not active_loaded_skills:
+                return ""
+            blocks = ["--- ACTIVE SKILLS INSTRUCTIONS ---"]
+            for s_name, s_def in active_loaded_skills.items():
+                blocks.append(f"[SKILL: {s_name}]\n{s_def.instruction.strip()}")
+            return "\n\n".join(blocks)
+
+        skills_block = _format_skills_block()
+        current_prompt = f"{skills_block}\n\n{prompt}" if skills_block else prompt
         last_response = ""
 
         for i in range(max_iterations):
@@ -379,14 +434,36 @@ class AgentOrchestrator(Orchestrator):
             if not last_response:
                 break
 
-            # 2 & 3. Ищем и выполняем инструменты
-            tool_results = await self.execute_tools(last_response, tools)
-            if tool_results is None:
-                # Если инструментов нет - это финальный ответ
+            # 2. Выполняем обычные tool_calls
+            tool_results = await self.execute_tools(last_response, active_tools)
+
+            # 3. Проверяем fallback-токены [LOAD_SKILL: name]
+            fallback_results: list[str] = []
+            if skills is not None:
+                matches = self.LOAD_SKILL_PATTERN.findall(last_response)
+                for matched_name in matches:
+                    self._logger.info("Перехвачен маркер [LOAD_SKILL: %s]", matched_name)
+                    res = await active_tools["load_skill"](name=matched_name)
+                    fallback_results.append(f"Result of load_skill: {res}")
+
+            combined_results: list[str] = []
+            if tool_results:
+                combined_results.append(tool_results)
+            if fallback_results:
+                combined_results.extend(fallback_results)
+
+            if not combined_results:
+                # Если инструментов и маркеров нет - это финальный ответ
                 return last_response
 
-            # 4. Формируем новый промпт с результатами для следующей итерации
-            current_prompt = f"{last_response}\n\n--- TOOL RESULTS ---\n{tool_results}"
+            final_results_str = "\n".join(combined_results)
+
+            # 4. Формируем новый промпт с инъекцией инструкций активных скиллов в начало
+            skills_block = _format_skills_block()
+            if skills_block:
+                current_prompt = f"{skills_block}\n\n{last_response}\n\n--- TOOL RESULTS ---\n{final_results_str}"
+            else:
+                current_prompt = f"{last_response}\n\n--- TOOL RESULTS ---\n{final_results_str}"
 
         self._logger.warning("Достигнут лимит итераций агента (%d)", max_iterations)
         return last_response

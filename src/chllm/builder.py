@@ -3,10 +3,15 @@
 Позволяет объединять инструкции, контекст и данные в единый запрос.
 """
 
+from __future__ import annotations
+
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from .skills.registry import SkillRegistry
 
 
 class PromptBuilder:
@@ -27,6 +32,7 @@ class PromptBuilder:
         data_label: str = "INPUT DATA",
         context_label: str = "CONTEXT",
         response_model: type[BaseModel] | None = None,
+        skills: SkillRegistry | None = None,
     ) -> str:
         """Собирает финальный текст промпта.
 
@@ -57,6 +63,11 @@ class PromptBuilder:
         if response_model:
             schema_instruction = self.generate_schema_instruction(response_model)
             instructions.append(schema_instruction)
+
+        if skills is not None and hasattr(skills, "format_catalog"):
+            catalog_instruction = skills.format_catalog()
+            if catalog_instruction:
+                instructions.append(catalog_instruction)
 
         if instructions:
             parts.append("\n".join(instructions))

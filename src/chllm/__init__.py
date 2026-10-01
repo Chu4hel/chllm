@@ -10,12 +10,24 @@ from .exceptions import (
     QuotaExceededError,
     RateLimitError,
     ServiceUnavailableError,
+    SkillError,
+    SkillNotFoundError,
+    SkillValidationError,
 )
 from .masking import ContentMasker, MaskedResult
 from .metrics import TokenCounter, UsageMetrics
 from .orchestrator import AgentOrchestrator, LLMProvider, Orchestrator, RetryStrategy
 from .parser import RobustLLMParser, ToolCall
 from .providers import GenericCallableProvider, OpenAICompatibleProvider
+from .skills import (
+    FileSystemSkillSource,
+    InMemorySkillSource,
+    ISkillSource,
+    SkillDefinition,
+    SkillMetadata,
+    SkillRegistry,
+    SkillValidator,
+)
 
 __all__ = [
     "AgentOrchestrator",
@@ -27,7 +39,10 @@ __all__ = [
     "ContentMasker",
     "ContextBuilder",
     "ContextItem",
+    "FileSystemSkillSource",
     "GenericCallableProvider",
+    "ISkillSource",
+    "InMemorySkillSource",
     "InvalidRequestError",
     "LLMProvider",
     "MaskedResult",
@@ -40,6 +55,13 @@ __all__ = [
     "RetryStrategy",
     "RobustLLMParser",
     "ServiceUnavailableError",
+    "SkillDefinition",
+    "SkillError",
+    "SkillMetadata",
+    "SkillNotFoundError",
+    "SkillRegistry",
+    "SkillValidationError",
+    "SkillValidator",
     "TokenCounter",
     "ToolCall",
     "UsageMetrics",

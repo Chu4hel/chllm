@@ -12,6 +12,7 @@ from .provider import (
     RateLimitError,
     ServiceUnavailableError,
 )
+from .skills import SkillError, SkillNotFoundError, SkillValidationError
 
 __all__ = [
     "AuthenticationError",
@@ -22,4 +23,7 @@ __all__ = [
     "QuotaExceededError",
     "RateLimitError",
     "ServiceUnavailableError",
+    "SkillError",
+    "SkillNotFoundError",
+    "SkillValidationError",
 ]

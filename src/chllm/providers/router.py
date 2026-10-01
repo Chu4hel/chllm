@@ -123,7 +123,7 @@ class OpenAIRouterProvider:
     def _init_client(self) -> Any:
         """Инициализирует клиент httpx.AsyncClient с настройками пула и прокси."""
         try:
-            import httpx
+            import httpx  # chutils: ignore[ChutilsIntegrationRule]
         except ImportError as err:
             raise ImportError(
                 "Для использования OpenAIRouterProvider необходимо установить пакет httpx: "

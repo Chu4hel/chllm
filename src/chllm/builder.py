@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .skills.registry import SkillRegistry
+    from .triggers.registry import TriggerRegistry
 
 
 class PromptBuilder:
@@ -33,6 +34,7 @@ class PromptBuilder:
         context_label: str = "CONTEXT",
         response_model: type[BaseModel] | None = None,
         skills: SkillRegistry | None = None,
+        triggers: TriggerRegistry | None = None,
     ) -> str:
         """Собирает финальный текст промпта.
 
@@ -44,6 +46,7 @@ class PromptBuilder:
             context_label: Заголовок для блока контекста в промпте.
             response_model: Опциональная Pydantic-модель для автоматической генерации JSON-схемы.
             skills: Опциональный реестр навыков для добавления каталога в промпт.
+            triggers: Опциональный реестр текстовых fallback-триггеров для подсказки в промпте.
 
         Returns:
             str: Сформированный текст промпта.
@@ -69,6 +72,11 @@ class PromptBuilder:
             catalog_instruction = skills.format_catalog()
             if catalog_instruction:
                 instructions.append(catalog_instruction)
+
+        if triggers is not None and hasattr(triggers, "format_instructions"):
+            trigger_instruction = triggers.format_instructions()
+            if trigger_instruction:
+                instructions.append(trigger_instruction)
 
         if instructions:
             parts.append("\n".join(instructions))

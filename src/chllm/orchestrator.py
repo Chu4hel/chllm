@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import random
-import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
@@ -16,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 if TYPE_CHECKING:
     from .skills.domain import SkillDefinition
     from .skills.registry import SkillRegistry
+    from .triggers.registry import TriggerRegistry
 
 from .exceptions import ContentBlockedError, ParsingError, RateLimitError, ServiceUnavailableError
 from .utils import split_batch
@@ -322,19 +322,23 @@ class AgentOrchestrator(Orchestrator):
     """Расширенный оркестратор для работы в режиме автономного агента.
 
     Поддерживает цикл "запрос -> вызов инструментов -> результат -> запрос",
-    а также подсистему динамических навыков (Lazy Skills System).
+    подсистему динамических навыков (Lazy Skills System) и текстовые fallback-триггеры.
     """
 
-    LOAD_SKILL_PATTERN = re.compile(r"\[LOAD_SKILL:\s*([a-zA-Z0-9_-]+)\]", re.IGNORECASE)
-
-    async def execute_tools(self, response_text: str, tools: dict[str, Callable]) -> str | None:
-        """Анализирует текст ответа, и если найдены вызовы инструментов, выполняет их.
+    async def execute_tools(
+        self,
+        response_text: str,
+        tools: dict[str, Callable[..., Any]],
+        triggers: TriggerRegistry | None = None,
+    ) -> str | None:
+        """Анализирует текст ответа, и если найдены вызовы инструментов или триггеры, выполняет их.
 
         Возвращает строку с результатами. Если инструментов нет, возвращает None.
 
         Args:
             response_text: Текст ответа модели, возможно содержащий вызовы инструментов.
             tools: Словарь доступных функций-инструментов.
+            triggers: Опциональный реестр текстовых fallback-триггеров.
 
         Returns:
             Результаты выполнения инструментов в виде строки или None.
@@ -343,7 +347,7 @@ class AgentOrchestrator(Orchestrator):
 
         parser = RobustLLMParser(logger=self._logger)
 
-        tool_calls = parser.parse_tool_calls(response_text)
+        tool_calls = parser.parse_tool_calls(response_text, triggers=triggers)
         if not tool_calls:
             return None
 
@@ -372,12 +376,13 @@ class AgentOrchestrator(Orchestrator):
     async def execute_loop(
         self,
         prompt: str,
-        tools: dict[str, Callable] | None = None,
+        tools: dict[str, Callable[..., Any]] | None = None,
         max_iterations: int = 5,
         skills: SkillRegistry | None = None,
         preload_skills: Sequence[str] | None = None,
+        triggers: TriggerRegistry | None = None,
     ) -> str:
-        """Запускает цикл автономной работы агента с поддержкой инструментов и динамических навыков.
+        """Запускает цикл автономной работы агента с поддержкой инструментов, навыков и триггеров.
 
         Args:
             prompt: Начальный промпт для ИИ.
@@ -385,11 +390,15 @@ class AgentOrchestrator(Orchestrator):
             max_iterations: Максимальное количество итераций (защита от зацикливания).
             skills: Опциональный реестр навыков для ленивой загрузки.
             preload_skills: Список имен навыков для немедленной активации (Zero-RTT).
+            triggers: Опциональный реестр текстовых fallback-триггеров.
 
         Returns:
             Финальный текстовый ответ ИИ.
         """
-        active_tools: dict[str, Callable] = dict(tools or {})
+        from .triggers.registry import TriggerRegistry
+
+        effective_triggers = triggers if triggers is not None else TriggerRegistry.create_default()
+        active_tools: dict[str, Callable[..., Any]] = dict(tools or {})
         active_loaded_skills: dict[str, SkillDefinition] = {}
 
         if skills is not None:
@@ -437,36 +446,23 @@ class AgentOrchestrator(Orchestrator):
             if not last_response:
                 break
 
-            # 2. Выполняем обычные tool_calls
-            tool_results = await self.execute_tools(last_response, active_tools)
+            # 2. Выполняем tool_calls (JSON и текстовые триггеры унифицированно)
+            tool_results = await self.execute_tools(
+                last_response,
+                active_tools,
+                triggers=effective_triggers,
+            )
 
-            # 3. Проверяем fallback-токены [LOAD_SKILL: name]
-            fallback_results: list[str] = []
-            if skills is not None:
-                matches = self.LOAD_SKILL_PATTERN.findall(last_response)
-                for matched_name in matches:
-                    self._logger.info("Перехвачен маркер [LOAD_SKILL: %s]", matched_name)
-                    res = await active_tools["load_skill"](name=matched_name)
-                    fallback_results.append(f"Result of load_skill: {res}")
+            if tool_results is None:
+                # Если инструментов и триггеров нет - это финальный ответ
+                return effective_triggers.strip_triggers(last_response)
 
-            combined_results: list[str] = []
-            if tool_results:
-                combined_results.append(tool_results)
-            if fallback_results:
-                combined_results.extend(fallback_results)
-
-            if not combined_results:
-                # Если инструментов и маркеров нет - это финальный ответ
-                return last_response
-
-            final_results_str = "\n".join(combined_results)
-
-            # 4. Формируем новый промпт с инъекцией инструкций активных скиллов в начало
+            # 3. Формируем новый промпт с инъекцией инструкций активных скиллов в начало
             skills_block = _format_skills_block()
             if skills_block:
-                current_prompt = f"{skills_block}\n\n{last_response}\n\n--- TOOL RESULTS ---\n{final_results_str}"
+                current_prompt = f"{skills_block}\n\n{last_response}\n\n--- TOOL RESULTS ---\n{tool_results}"
             else:
-                current_prompt = f"{last_response}\n\n--- TOOL RESULTS ---\n{final_results_str}"
+                current_prompt = f"{last_response}\n\n--- TOOL RESULTS ---\n{tool_results}"
 
         self._logger.warning("Достигнут лимит итераций агента (%d)", max_iterations)
-        return last_response
+        return effective_triggers.strip_triggers(last_response)

@@ -3,9 +3,14 @@
 Централизует логику очистки, исправления и разбора JSON данных.
 """
 
+from __future__ import annotations
+
 import json
 from collections.abc import AsyncIterable, AsyncIterator, Mapping, Sequence
-from typing import Any, TypeVar, overload
+from typing import TYPE_CHECKING, Any, TypeVar, overload
+
+if TYPE_CHECKING:
+    from .triggers.registry import TriggerRegistry
 
 from ._json_repair import (
     ToolCall,
@@ -344,20 +349,26 @@ class RobustLLMParser:
             return json.loads(recovered)
 
     @staticmethod
-    def parse_tool_calls(text: str) -> list[ToolCall]:
-        """Ищет и парсит вызовы инструментов (JSON блоки) в тексте.
+    def parse_tool_calls(
+        text: str,
+        triggers: TriggerRegistry | None = None,
+    ) -> list[ToolCall]:
+        """Ищет и парсит вызовы инструментов (JSON блоки и текстовые триггеры) в тексте.
 
         Args:
             text: Сырой текст ответа ИИ.
+            triggers: Опциональный реестр текстовых fallback-триггеров.
 
         Returns:
-            Список объектов ToolCall.
+            Дедуплицированный список объектов ToolCall.
         """
         if not text:
             return []
 
+        results: list[ToolCall] = []
+
+        # 1. Поиск JSON блоков вызовов инструментов
         blocks = find_json_blocks(text)
-        results = []
         for block in blocks:
             try:
                 data = json.loads(block)
@@ -392,7 +403,21 @@ class RobustLLMParser:
             except (json.JSONDecodeError, ValueError):
                 continue
 
-        return results
+        # 2. Поиск текстовых команд триггеров
+        if triggers is not None:
+            trigger_calls = triggers.parse_triggers(text)
+            results.extend(trigger_calls)
+
+        # 3. Дедупликация вызовов (отсекаем дубликаты с одинаковым именем и аргументами)
+        seen: set[tuple[str, str]] = set()
+        deduped: list[ToolCall] = []
+        for call in results:
+            key = (call.name, json.dumps(call.args, sort_keys=True, ensure_ascii=False, default=str))
+            if key not in seen:
+                seen.add(key)
+                deduped.append(call)
+
+        return deduped
 
     @staticmethod
     def _clean_markdown(text: str) -> str:

@@ -46,6 +46,7 @@ from .skills import (
     SkillValidator,
 )
 from .tools import CliInputMode, CliTool, CliToolConfig
+from .triggers import TextCommandTrigger, TriggerRegistry
 
 __all__ = [
     "AgentMessage",
@@ -98,7 +99,9 @@ __all__ = [
     "SkillRegistry",
     "SkillValidationError",
     "SkillValidator",
+    "TextCommandTrigger",
     "TokenCounter",
     "ToolCall",
+    "TriggerRegistry",
     "UsageMetrics",
 ]

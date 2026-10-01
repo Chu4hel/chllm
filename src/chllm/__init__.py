@@ -60,6 +60,7 @@ from .skills import (
     SkillRegistry,
     SkillValidator,
 )
+from .summarizer import ChainedSummarizer, HierarchicalProcessor, MapReduceConfig
 from .tools import CliInputMode, CliTool, CliToolConfig
 from .triggers import TextCommandTrigger, TriggerRegistry
 from .utils import mask_proxy_url, split_batch
@@ -73,6 +74,7 @@ __all__ = [
     "AuthenticationError",
     "BatchItemResult",
     "CHLLMError",
+    "ChainedSummarizer",
     "ChunkingConfig",
     "CliInputMode",
     "CliNotFoundError",
@@ -91,6 +93,7 @@ __all__ = [
     "GeminiThinkingConfig",
     "GenericCallableProvider",
     "GoogleGenAIProvider",
+    "HierarchicalProcessor",
     "ISessionStorage",
     "ISkillSource",
     "InMemorySessionStorage",
@@ -101,6 +104,7 @@ __all__ = [
     "KeyStatus",
     "LLMProvider",
     "LocationUnsupportedError",
+    "MapReduceConfig",
     "MaskedResult",
     "NoActiveKeysError",
     "OpenAICompatibleProvider",

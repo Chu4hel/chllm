@@ -23,6 +23,11 @@ class ChunkingConfig(BaseModel):
     )
     strip_whitespace: bool = Field(default=True, description="Очищать ли пробельные символы по краям чанков.")
 
+    @property
+    def chunk_size(self) -> int:
+        """Псевдоним для max_tokens."""
+        return self.max_tokens
+
 
 class TextChunker:
     """Универсальный чанкер для разбиения текстов и списков с гарантией лимита токенов."""
@@ -46,6 +51,11 @@ class TextChunker:
             self._counter_fn = token_counter.count
         else:
             self._counter_fn = token_counter
+
+    @property
+    def token_counter(self) -> Callable[[str], int]:
+        """Функция подсчета токенов."""
+        return self._counter_fn
 
     def count_tokens(self, text: str) -> int:
         """Возвращает количество токенов в переданном тексте.

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import random
 import re
 from collections.abc import Callable, Mapping, Sequence
@@ -356,6 +357,8 @@ class AgentOrchestrator(Orchestrator):
                         res = await tool_func(**call.args)
                     else:
                         res = tool_func(**call.args)
+                        if inspect.isawaitable(res):
+                            res = await res
                     results.append(f"Result of {call.name}: {res}")
                 except Exception as e:
                     self._logger.error("Ошибка при выполнении инструмента %s: %s", call.name, e)

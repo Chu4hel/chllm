@@ -13,10 +13,15 @@ from .provider import (
     ServiceUnavailableError,
 )
 from .skills import SkillError, SkillNotFoundError, SkillValidationError
+from .tools import CliNotFoundError, CliProcessError, CliTimeoutError, CliToolError
 
 __all__ = [
     "AuthenticationError",
     "CHLLMError",
+    "CliNotFoundError",
+    "CliProcessError",
+    "CliTimeoutError",
+    "CliToolError",
     "ContentBlockedError",
     "InvalidRequestError",
     "ParsingError",

@@ -4,6 +4,10 @@ from .context import ContextBuilder, ContextItem
 from .exceptions import (
     AuthenticationError,
     CHLLMError,
+    CliNotFoundError,
+    CliProcessError,
+    CliTimeoutError,
+    CliToolError,
     ContentBlockedError,
     InvalidRequestError,
     ParsingError,
@@ -28,6 +32,7 @@ from .skills import (
     SkillRegistry,
     SkillValidator,
 )
+from .tools import CliInputMode, CliTool, CliToolConfig
 
 __all__ = [
     "AgentOrchestrator",
@@ -35,6 +40,13 @@ __all__ = [
     "AuthenticationError",
     "BatchItemResult",
     "CHLLMError",
+    "CliInputMode",
+    "CliNotFoundError",
+    "CliProcessError",
+    "CliTimeoutError",
+    "CliTool",
+    "CliToolConfig",
+    "CliToolError",
     "ContentBlockedError",
     "ContentMasker",
     "ContextBuilder",

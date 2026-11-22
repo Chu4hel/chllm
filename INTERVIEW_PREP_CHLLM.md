@@ -24,7 +24,7 @@
   - Архитектура динамических навыков (Skills) с валидацией схем и CLI-инструментарием.
 - **Автор:** Chu4hel ([sergeiivanov636@gmail.com](mailto:sergeiivanov636@gmail.com))
 - **Стек технологий:**
-  - **Ядро:** Python 3.10+, Pydantic v2 (Rust core, строгие схемы, `TypeAdapter`, `model_validate`, `model_json_schema`), PyYAML 6.0+, `asyncio` (Semaphore, gather, Locks, Tasks).
+  - **Ядро:** Python 3.11+, Pydantic v2 (Rust core, строгие схемы, `TypeAdapter`, `model_validate`, `model_json_schema`), PyYAML 6.0+, `asyncio` (Semaphore, gather, Locks, Tasks).
   - **Архитектурные паттерны:** Clean Architecture, Dependency Inversion (`typing.Protocol`), Zero Core Bloat, Stack Machine JSON Repair, Self-Correction via Reflection, Binary Batch Splitting, Multi-Provider Key Rotation, Map-Reduce Chaining.
   - **Инструменты сборки и качества:** uv (пакетный менеджер), hatchling (PEP 517/621 build backend), pytest + pytest-asyncio + pytest-mock (100% изоляция без реальных платных API), ruff (linter/formatter), mypy (строгая типизация, PEP 561 py.typed).
   - **Опциональные модули:**

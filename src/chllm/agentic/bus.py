@@ -43,7 +43,7 @@ class SessionMessageBus:
 
         try:
             return await asyncio.wait_for(queue.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     def read_inbox(self, session_id: str) -> list[AgentMessage]:

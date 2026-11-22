@@ -1,6 +1,5 @@
 """Тесты для OpenAIRouterProvider, работы со шлюзами, сессиями BLG и метриками."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -165,7 +164,7 @@ def test_handle_api_error_network():
         provider.handle_api_error(err)
 
     with pytest.raises(ProxyConnectionError):
-        provider.handle_api_error(asyncio.TimeoutError("Timeout"))
+        provider.handle_api_error(TimeoutError("Timeout"))
 
 
 def test_handle_api_error_http_status_codes():

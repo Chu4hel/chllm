@@ -1,14 +1,14 @@
 """Доменные модели и протоколы для мультиагентного взаимодействия (chllm.agentic)."""
 
 from collections.abc import Callable
-from datetime import datetime
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ForkMode(str, Enum):
+class ForkMode(StrEnum):
     """Режим инициализации контекста дочерней агентной сессии."""
 
     ISOLATED = "isolated"
@@ -32,7 +32,7 @@ class AgentMessage(BaseModel):
     sender_id: str = Field(..., description="ID сессии отправителя")
     recipient_id: str = Field(..., description="ID сессии получателя")
     content: str = Field(..., description="Текст сообщения или полезная нагрузка")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Время отправки")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Время отправки")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Метаданные")
 
 
@@ -56,7 +56,7 @@ class SessionSnapshot(BaseModel):
     role: str = Field(default="Assistant", description="Роль агента")
     system_prompt: str = Field(default="", description="Системный промпт")
     history: list[dict[str, str]] = Field(default_factory=list, description="История диалога")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Время создания")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Время создания")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Метаданные сессии")
 
 
@@ -105,7 +105,7 @@ class ISessionStorage(Protocol):
         ...
 
 
-class AgentTaskStatus(str, Enum):
+class AgentTaskStatus(StrEnum):
     """Статусы выполнения задачи агентом."""
 
     PENDING = "pending"
@@ -113,7 +113,7 @@ class AgentTaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class AgentMode(str, Enum):
+class AgentMode(StrEnum):
     """Протокол взаимодействия агента с внешним миром / оператором."""
 
     API = "api"  # Прямой вызов LLM через API (OpenAI, Anthropic, vLLM, Ollama)
@@ -121,7 +121,7 @@ class AgentMode(str, Enum):
     BUFFER = "buffer"  # Zero-API файловый буфер (.agent_inbox / .agent_outbox)
 
 
-class AgentTaskType(str, Enum):
+class AgentTaskType(StrEnum):
     """Универсальные типы задач агентского взаимодействия."""
 
     SELF_HEALING = "self_healing"

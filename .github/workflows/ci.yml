@@ -21,6 +21,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
@@ -35,7 +36,12 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Run Mypy
+        if: matrix.python-version != '3.15'
         run: uv run mypy .
+
+      - name: Run Mypy (pure Python wheel for 3.15 beta)
+        if: matrix.python-version == '3.15'
+        run: uv run --no-binary-package mypy mypy .
 
       - name: Run chutils dev ai-lint
         run: uv run chutils dev ai-lint

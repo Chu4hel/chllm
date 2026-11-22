@@ -379,7 +379,7 @@ class AgentOrchestrator(Orchestrator):
                 self._logger.info("Выполнение инструмента: %s", call.name)
                 try:
                     tool_func = tools[call.name]
-                    if asyncio.iscoroutinefunction(tool_func):
+                    if inspect.iscoroutinefunction(tool_func):
                         res = await tool_func(**call.args)
                     else:
                         res = tool_func(**call.args)

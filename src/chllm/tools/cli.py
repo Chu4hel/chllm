@@ -6,7 +6,7 @@ import re
 import shlex
 import shutil
 from collections.abc import Sequence
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +18,7 @@ from ..parser import RobustLLMParser
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
-class CliInputMode(str, Enum):
+class CliInputMode(StrEnum):
     """Режим передачи входных аргументов во внешний процесс."""
 
     STDIN_JSON = "stdin_json"
@@ -139,7 +139,7 @@ class CliTool:
                 process.communicate(input=stdin_bytes),
                 timeout=self.config.timeout,
             )
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             try:
                 process.kill()
                 await process.wait()

@@ -5,6 +5,7 @@ import concurrent.futures
 import json
 import re
 import uuid
+from collections.abc import Coroutine
 from typing import Any
 
 from pydantic import BaseModel
@@ -32,6 +33,41 @@ except ImportError:
 
 
 logger = setup_logger("chllm.integrations.smolagents.models")
+
+
+def _submit_coroutine(
+    coro: Coroutine[Any, Any, Any],
+    loop: asyncio.AbstractEventLoop | None,
+) -> "concurrent.futures.Future[Any]":
+    """Отправляет корутину в целевой event loop и возвращает Future с результатом.
+
+    Начиная с Python 3.14 ``asyncio.get_event_loop()`` больше не создаёт цикл событий
+    неявно и бросает RuntimeError, поэтому при отсутствии запущенного цикла корутина
+    выполняется синхронно через ``asyncio.run`` в текущем потоке.
+
+    Args:
+        coro: Корутина для выполнения.
+        loop: Целевой цикл событий (может быть None или уже закрытым).
+
+    Returns:
+        Future с результатом выполнения корутины.
+    """
+    target_loop = loop
+    if target_loop is None or target_loop.is_closed():
+        try:
+            target_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            target_loop = None
+
+    if target_loop is not None:
+        return asyncio.run_coroutine_threadsafe(coro, target_loop)
+
+    future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+    try:
+        future.set_result(asyncio.run(coro))
+    except BaseException as exc:
+        future.set_exception(exc)
+    return future
 
 
 class WebChatSmolModel(Model):
@@ -215,14 +251,7 @@ class WebChatSmolModel(Model):
             context=context,
         )
 
-        target_loop = self.loop
-        if target_loop is None or target_loop.is_closed():
-            try:
-                target_loop = asyncio.get_running_loop()
-            except RuntimeError:
-                target_loop = asyncio.get_event_loop()
-
-        return asyncio.run_coroutine_threadsafe(coro, target_loop)
+        return _submit_coroutine(coro, self.loop)
 
     def _parse_user_response_to_chat_message(self, raw: str) -> ChatMessage:
         """Парсит полученный ответ оператора в ChatMessage с ToolCall или final_answer."""
@@ -408,15 +437,8 @@ class BufferSmolModel(Model):
         )
 
         try:
-            target_loop = self.loop
-            if target_loop is None or target_loop.is_closed():
-                try:
-                    target_loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    target_loop = asyncio.get_event_loop()
-
             coro = self.file_queue.wait_for_result(task_id, timeout=self.timeout_seconds)
-            fut = asyncio.run_coroutine_threadsafe(coro, target_loop)
+            fut = _submit_coroutine(coro, self.loop)
             result_dict = fut.result(timeout=self.timeout_seconds)
         except Exception as e:
             logger.error("Таймаут или сбой ожидания Zero-API буфера для шага %s: %s", task_id, e)

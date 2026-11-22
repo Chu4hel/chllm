@@ -6,7 +6,7 @@ import asyncio
 import logging  # chutils: ignore[ChutilsIntegrationRule]
 import time
 from collections.abc import Callable, Sequence
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel
@@ -36,7 +36,7 @@ except ImportError:
         return logging.getLogger(name)
 
 
-class KeyStatus(str, Enum):
+class KeyStatus(StrEnum):
     """Статус API-ключа в пуле."""
 
     ACTIVE = "active"
@@ -45,7 +45,7 @@ class KeyStatus(str, Enum):
     BANNED = "banned"
 
 
-class RotationStrategy(str, Enum):
+class RotationStrategy(StrEnum):
     """Стратегия выбора ключа из пула."""
 
     ROUND_ROBIN = "round_robin"

@@ -1,5 +1,6 @@
 """Доменные модели и протоколы для мультиагентного взаимодействия (chllm.agentic)."""
 
+from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
 from typing import Any, Protocol
@@ -100,5 +101,154 @@ class ISessionStorage(Protocol):
 
         Returns:
             True, если сессия была найдена и удалена, иначе False.
+        """
+        ...
+
+
+class AgentTaskStatus(str, Enum):
+    """Статусы выполнения задачи агентом."""
+
+    PENDING = "pending"
+    RESOLVED = "resolved"
+    CANCELLED = "cancelled"
+
+
+class AgentMode(str, Enum):
+    """Протокол взаимодействия агента с внешним миром / оператором."""
+
+    API = "api"  # Прямой вызов LLM через API (OpenAI, Anthropic, vLLM, Ollama)
+    WEB_CHAT = "web_chat"  # Интерактивный веб-чат Human-in-the-Loop
+    BUFFER = "buffer"  # Zero-API файловый буфер (.agent_inbox / .agent_outbox)
+
+
+class AgentTaskType(str, Enum):
+    """Универсальные типы задач агентского взаимодействия."""
+
+    SELF_HEALING = "self_healing"
+    CODE_FIX = "code_fix"
+    ASSISTANT = "assistant"
+    SCORE = "score"
+    REPLY = "reply"
+    GENERAL = "general"
+
+
+class AgentTask(BaseModel):
+    """Модель задачи агента в интерактивной очереди или буфере."""
+
+    id: str = Field(..., description="Уникальный идентификатор задачи.")
+    title: str = Field(..., description="Заголовок задачи для UI / логов.")
+    prompt: str = Field(..., description="Текст промпта или инструкция.")
+    schema_name: str | None = Field(
+        default=None,
+        description="Имя зарегистрированной Pydantic-схемы для парсинга и валидации.",
+    )
+    task_type: AgentTaskType = Field(
+        default=AgentTaskType.GENERAL,
+        description="Категория/тип задачи.",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now,
+        description="Время создания задачи.",
+    )
+    status: AgentTaskStatus = Field(
+        default=AgentTaskStatus.PENDING,
+        description="Текущий статус задачи.",
+    )
+    context: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Произвольный контекст задачи (метаданные, аргументы, история).",
+    )
+
+
+class AgentStepResult(BaseModel):
+    """Результат выполнения одного шага рассуждения или вызова инструмента."""
+
+    step_index: int = Field(..., description="Номер шага агента.")
+    raw_response: str | None = Field(
+        default=None,
+        description="Сырой ответ языковой модели.",
+    )
+    parsed_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Структурированные данные после парсинга.",
+    )
+    tool_calls: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Список вызванных инструментов и аргументов.",
+    )
+    error: str | None = Field(
+        default=None,
+        description="Текст ошибки, если шаг завершился сбоем.",
+    )
+
+
+class IInteractiveQueue(Protocol):
+    """Протокол интерактивной очереди задач для Human-in-the-Loop."""
+
+    def register_schema(self, schema_name: str, model_cls: type[BaseModel]) -> None:
+        """Регистрирует Pydantic-модель для валидации ответа.
+
+        Args:
+            schema_name: Имя схемы.
+            model_cls: Класс модели Pydantic.
+        """
+        ...
+
+    async def enqueue_task(
+        self,
+        task_id: str,
+        title: str,
+        prompt: str,
+        schema_name: str | None = None,
+        task_type: AgentTaskType = AgentTaskType.GENERAL,
+        context: dict[str, Any] | None = None,
+    ) -> BaseModel | str:
+        """Помещает задачу в очередь и ожидает решения от человека.
+
+        Args:
+            task_id: Идентификатор задачи.
+            title: Заголовок задачи.
+            prompt: Текст промпта/инструкции.
+            schema_name: Имя схемы ответа.
+            task_type: Тип задачи.
+            context: Дополнительный контекст.
+
+        Returns:
+            Результат выполнения задачи.
+        """
+        ...
+
+    def resolve_task(self, task_id: str, raw_response: str) -> BaseModel | str:
+        """Завершает задачу полученным текстовым ответом с парсингом.
+
+        Args:
+            task_id: Идентификатор задачи.
+            raw_response: Сырой текст ответа от пользователя или LLM.
+
+        Returns:
+            Распарсенный или исходный результат.
+        """
+        ...
+
+    def cancel_task(self, task_id: str) -> None:
+        """Отменяет задачу в очереди.
+
+        Args:
+            task_id: Идентификатор задачи.
+        """
+        ...
+
+    def subscribe(
+        self,
+        on_added: Callable[[AgentTask], None] | None = None,
+        on_resolved: Callable[[str, Any], None] | None = None,
+        on_cancelled: Callable[[str], None] | None = None,
+    ) -> None:
+        """Подписывает обработчики на события изменения очереди.
+
+        Args:
+            on_added: Коллбэк добавления задачи.
+            on_resolved: Коллбэк завершения задачи.
+            on_cancelled: Коллбэк отмены задачи.
         """
         ...

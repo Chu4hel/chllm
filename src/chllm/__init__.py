@@ -1,17 +1,30 @@
 from .agentic import (
     AgentMessage,
+    AgentMode,
     AgentSession,
+    AgentStepResult,
+    AgentTask,
+    AgentTaskStatus,
+    AgentTaskType,
     ConversationPool,
     ForkMode,
+    IInteractiveQueue,
     InMemorySessionStorage,
+    InteractiveTaskQueue,
     ISessionStorage,
     SessionMessageBus,
     SessionSnapshot,
 )
 from .batch_processor import AsyncBatchProcessor, BatchItemResult
+from .buffer import BufferProvider, FileTaskQueue, ITaskQueue
 from .builder import FewShotExample, PromptBuilder
 from .chunker import ChunkingConfig, TextChunker, TokenChunker
-from .context import ContextBuilder, ContextItem
+from .context import (
+    ContextBuilder,
+    ContextItem,
+    build_step_limit_instruction,
+    compress_history_messages,
+)
 from .exceptions import (
     AgenticError,
     AuthenticationError,
@@ -67,12 +80,18 @@ from .utils import mask_proxy_url, split_batch
 
 __all__ = [
     "AgentMessage",
+    "AgentMode",
     "AgentOrchestrator",
     "AgentSession",
+    "AgentStepResult",
+    "AgentTask",
+    "AgentTaskStatus",
+    "AgentTaskType",
     "AgenticError",
     "AsyncBatchProcessor",
     "AuthenticationError",
     "BatchItemResult",
+    "BufferProvider",
     "CHLLMError",
     "ChainedSummarizer",
     "ChunkingConfig",
@@ -90,15 +109,19 @@ __all__ = [
     "ConversationPool",
     "FewShotExample",
     "FileSystemSkillSource",
+    "FileTaskQueue",
     "ForkMode",
     "GeminiThinkingConfig",
     "GenericCallableProvider",
     "GoogleGenAIProvider",
     "HierarchicalProcessor",
+    "IInteractiveQueue",
     "ISessionStorage",
     "ISkillSource",
+    "ITaskQueue",
     "InMemorySessionStorage",
     "InMemorySkillSource",
+    "InteractiveTaskQueue",
     "InvalidRequestError",
     "KeyItem",
     "KeyPoolProvider",
@@ -140,6 +163,8 @@ __all__ = [
     "ToolCall",
     "TriggerRegistry",
     "UsageMetrics",
+    "build_step_limit_instruction",
+    "compress_history_messages",
     "mask_proxy_url",
     "model_supports_thinking",
 ]

@@ -456,6 +456,7 @@ class AgentOrchestrator(Orchestrator):
                 blocks.append(f"[SKILL: {s_name}]\n{s_def.instruction.strip()}")
             return "\n\n".join(blocks)
 
+        conversation_history: list[str] = [prompt]
         skills_block = _format_skills_block()
         current_prompt = f"{skills_block}\n\n{prompt}" if skills_block else prompt
         last_response = ""
@@ -479,12 +480,13 @@ class AgentOrchestrator(Orchestrator):
                 # Если инструментов и триггеров нет - это финальный ответ
                 return effective_triggers.strip_triggers(last_response)
 
-            # 3. Формируем новый промпт с инъекцией инструкций активных скиллов в начало
+            # 3. Добавляем вызов и результат инструмента в историю диалога
+            conversation_history.append(last_response)
+            conversation_history.append(f"--- TOOL RESULTS ---\n{tool_results}")
+
             skills_block = _format_skills_block()
-            if skills_block:
-                current_prompt = f"{skills_block}\n\n{last_response}\n\n--- TOOL RESULTS ---\n{tool_results}"
-            else:
-                current_prompt = f"{last_response}\n\n--- TOOL RESULTS ---\n{tool_results}"
+            history_text = "\n\n".join(conversation_history)
+            current_prompt = f"{skills_block}\n\n{history_text}" if skills_block else history_text
 
         self._logger.warning("Достигнут лимит итераций агента (%d)", max_iterations)
         return effective_triggers.strip_triggers(last_response)

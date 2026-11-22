@@ -3,13 +3,27 @@
 Обеспечивает отказоустойчивость, умные ретраи и автоматическое деление батчей.
 """
 
+from __future__ import annotations
+
 import asyncio
+import inspect
 import random
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
-from .exceptions import ContentBlockedError, ParsingError, RateLimitError, ServiceUnavailableError
+if TYPE_CHECKING:
+    from .skills.domain import SkillDefinition
+    from .skills.registry import SkillRegistry
+    from .triggers.registry import TriggerRegistry
+
+from .exceptions import (
+    ContentBlockedError,
+    ParsingError,
+    ProxyConnectionError,
+    RateLimitError,
+    ServiceUnavailableError,
+)
 from .utils import split_batch
 
 T = TypeVar("T")
@@ -69,7 +83,13 @@ class RetryStrategy:
     max_delay: float = 60.0
     exponential_base: float = 2.0
     use_jitter: bool = True
-    retryable_errors: tuple[type[Exception], ...] = (RateLimitError, ServiceUnavailableError, ConnectionError)
+    respect_retry_delay: bool = False
+    retryable_errors: tuple[type[Exception], ...] = (
+        RateLimitError,
+        ServiceUnavailableError,
+        ConnectionError,
+        ProxyConnectionError,
+    )
 
 
 class Orchestrator:
@@ -264,12 +284,22 @@ class Orchestrator:
                     self._logger.error("Все попытки исчерпаны. Последняя ошибка: %s", e)
                     raise
 
-                # Расчет задержки с учетом экспоненциального роста и джиттера
-                delay = min(
-                    self._strategy.base_delay * (self._strategy.exponential_base**attempt), self._strategy.max_delay
-                )
-                if self._strategy.use_jitter:
-                    delay = delay * random.uniform(0.8, 1.2)
+                # Расчет задержки: учитываем server retry_delay из ошибки при включенном respect_retry_delay
+                server_delay = getattr(e, "retry_delay", None)
+                if (
+                    self._strategy.respect_retry_delay
+                    and server_delay is not None
+                    and isinstance(server_delay, (int, float))
+                    and server_delay > 0
+                ):
+                    delay = min(float(server_delay), self._strategy.max_delay)
+                else:
+                    delay = min(
+                        self._strategy.base_delay * (self._strategy.exponential_base**attempt),
+                        self._strategy.max_delay,
+                    )
+                    if self._strategy.use_jitter:
+                        delay = delay * random.uniform(0.8, 1.2)
 
                 self._logger.warning(
                     "Ошибка при вызове LLM (%s). Попытка %d/%d через %.1fс.",
@@ -311,19 +341,26 @@ class Orchestrator:
 
 
 class AgentOrchestrator(Orchestrator):
-    """
-    Расширенный оркестратор для работы в режиме автономного агента.
-    Поддерживает цикл "запрос -> вызов инструментов -> результат -> запрос".
+    """Расширенный оркестратор для работы в режиме автономного агента.
+
+    Поддерживает цикл "запрос -> вызов инструментов -> результат -> запрос",
+    подсистему динамических навыков (Lazy Skills System) и текстовые fallback-триггеры.
     """
 
-    async def execute_tools(self, response_text: str, tools: dict[str, Callable]) -> str | None:
-        """Анализирует текст ответа, и если найдены вызовы инструментов, выполняет их.
+    async def execute_tools(
+        self,
+        response_text: str,
+        tools: dict[str, Callable[..., Any]],
+        triggers: TriggerRegistry | None = None,
+    ) -> str | None:
+        """Анализирует текст ответа, и если найдены вызовы инструментов или триггеры, выполняет их.
 
         Возвращает строку с результатами. Если инструментов нет, возвращает None.
 
         Args:
             response_text: Текст ответа модели, возможно содержащий вызовы инструментов.
             tools: Словарь доступных функций-инструментов.
+            triggers: Опциональный реестр текстовых fallback-триггеров.
 
         Returns:
             Результаты выполнения инструментов в виде строки или None.
@@ -332,7 +369,7 @@ class AgentOrchestrator(Orchestrator):
 
         parser = RobustLLMParser(logger=self._logger)
 
-        tool_calls = parser.parse_tool_calls(response_text)
+        tool_calls = parser.parse_tool_calls(response_text, triggers=triggers)
         if not tool_calls:
             return None
 
@@ -342,10 +379,12 @@ class AgentOrchestrator(Orchestrator):
                 self._logger.info("Выполнение инструмента: %s", call.name)
                 try:
                     tool_func = tools[call.name]
-                    if asyncio.iscoroutinefunction(tool_func):
+                    if inspect.iscoroutinefunction(tool_func):
                         res = await tool_func(**call.args)
                     else:
                         res = tool_func(**call.args)
+                        if inspect.isawaitable(res):
+                            res = await res
                     results.append(f"Result of {call.name}: {res}")
                 except Exception as e:
                     self._logger.error("Ошибка при выполнении инструмента %s: %s", call.name, e)
@@ -356,19 +395,70 @@ class AgentOrchestrator(Orchestrator):
 
         return "\n".join(results)
 
-    async def execute_loop(self, prompt: str, tools: dict[str, Callable], max_iterations: int = 5) -> str:
-        """
-        Запускает цикл автономной работы агента.
+    async def execute_loop(
+        self,
+        prompt: str,
+        tools: dict[str, Callable[..., Any]] | None = None,
+        max_iterations: int = 5,
+        skills: SkillRegistry | None = None,
+        preload_skills: Sequence[str] | None = None,
+        triggers: TriggerRegistry | None = None,
+    ) -> str:
+        """Запускает цикл автономной работы агента с поддержкой инструментов, навыков и триггеров.
 
         Args:
             prompt: Начальный промпт для ИИ.
             tools: Словарь доступных Python-функций {имя: функция}.
             max_iterations: Максимальное количество итераций (защита от зацикливания).
+            skills: Опциональный реестр навыков для ленивой загрузки.
+            preload_skills: Список имен навыков для немедленной активации (Zero-RTT).
+            triggers: Опциональный реестр текстовых fallback-триггеров.
 
         Returns:
             Финальный текстовый ответ ИИ.
         """
-        current_prompt = prompt
+        from .triggers.registry import TriggerRegistry
+
+        effective_triggers = triggers if triggers is not None else TriggerRegistry.create_default()
+        active_tools: dict[str, Callable[..., Any]] = dict(tools or {})
+        active_loaded_skills: dict[str, SkillDefinition] = {}
+
+        if skills is not None:
+
+            async def load_skill(name: str) -> str:
+                clean_name = name.strip()
+                if clean_name in active_loaded_skills:
+                    return f"Skill '{clean_name}' is already loaded."
+
+                skill = await skills.load_skill(clean_name)
+                if skill is None:
+                    catalog = await skills.get_catalog()
+                    avail = ", ".join(s.name for s in catalog) if catalog else "none"
+                    return f"Error: Skill '{clean_name}' not found. Available skills: {avail}"
+
+                active_loaded_skills[clean_name] = skill
+                if skill.tools:
+                    active_tools.update(skill.tools)
+                self._logger.info("Загружен навык: %s", clean_name)
+                return f"Skill '{clean_name}' successfully loaded. Follow its instructions."
+
+            active_tools["load_skill"] = load_skill
+
+            if preload_skills:
+                for skill_name in preload_skills:
+                    await load_skill(skill_name)
+
+        def _format_skills_block() -> str:
+            if not active_loaded_skills:
+                return ""
+            blocks = ["--- ACTIVE SKILLS INSTRUCTIONS ---"]
+            for s_name, s_def in active_loaded_skills.items():
+                blocks.append(f"[SKILL: {s_name}]\n{s_def.instruction.strip()}")
+            return "\n\n".join(blocks)
+
+        conversation_history: list[str] = [prompt]
+        skills_block = _format_skills_block()
+        current_prompt = f"{skills_block}\n\n{prompt}" if skills_block else prompt
         last_response = ""
 
         for i in range(max_iterations):
@@ -379,14 +469,24 @@ class AgentOrchestrator(Orchestrator):
             if not last_response:
                 break
 
-            # 2 & 3. Ищем и выполняем инструменты
-            tool_results = await self.execute_tools(last_response, tools)
-            if tool_results is None:
-                # Если инструментов нет - это финальный ответ
-                return last_response
+            # 2. Выполняем tool_calls (JSON и текстовые триггеры унифицированно)
+            tool_results = await self.execute_tools(
+                last_response,
+                active_tools,
+                triggers=effective_triggers,
+            )
 
-            # 4. Формируем новый промпт с результатами для следующей итерации
-            current_prompt = f"{last_response}\n\n--- TOOL RESULTS ---\n{tool_results}"
+            if tool_results is None:
+                # Если инструментов и триггеров нет - это финальный ответ
+                return effective_triggers.strip_triggers(last_response)
+
+            # 3. Добавляем вызов и результат инструмента в историю диалога
+            conversation_history.append(last_response)
+            conversation_history.append(f"--- TOOL RESULTS ---\n{tool_results}")
+
+            skills_block = _format_skills_block()
+            history_text = "\n\n".join(conversation_history)
+            current_prompt = f"{skills_block}\n\n{history_text}" if skills_block else history_text
 
         self._logger.warning("Достигнут лимит итераций агента (%d)", max_iterations)
-        return last_response
+        return effective_triggers.strip_triggers(last_response)

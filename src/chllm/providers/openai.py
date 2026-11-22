@@ -1,46 +1,6 @@
-"""
-Готовые провайдеры-адаптеры для работы с Orchestrator.
-Обеспечивают интеграцию с произвольными асинхронными функциями и популярными LLM SDK.
-"""
+"""Провайдер для OpenAI-совместимых API."""
 
-from collections.abc import Awaitable, Callable
 from typing import Any
-
-
-class GenericCallableProvider:
-    """Универсальный провайдер, оборачивающий любую асинхронную функцию.
-
-    Позволяет быстро интегрировать любую кастомную логику вызова LLM в Orchestrator.
-    """
-
-    def __init__(self, async_callable: Callable[[Any], Awaitable[Any]]):
-        """
-        Args:
-            async_callable: Асинхронная функция, принимающая данные запроса и возвращающая ответ.
-        """
-        self._async_callable = async_callable
-
-    async def execute(self, data: object) -> object:
-        """Выполняет запрос через переданную асинхронную функцию.
-
-        Args:
-            data: Данные запроса.
-
-        Returns:
-            Ответ от асинхронной функции.
-        """
-        return await self._async_callable(data)
-
-    def pack_single_prompt(self, prompt: str) -> object:
-        """По умолчанию передает строку промпта как есть.
-
-        Args:
-            prompt: Текст промпта.
-
-        Returns:
-            Текст промпта без изменений.
-        """
-        return prompt
 
 
 class OpenAICompatibleProvider:
@@ -56,8 +16,9 @@ class OpenAICompatibleProvider:
         model: str,
         temperature: float = 0.0,
         extra_kwargs: dict[str, Any] | None = None,
-    ):
-        """
+    ) -> None:
+        """Инициализирует провайдер.
+
         Args:
             client: Экземпляр асинхронного клиента (например, AsyncOpenAI).
             model: Имя модели (например, 'gpt-4o-mini', 'deepseek-chat').

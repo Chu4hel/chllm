@@ -1,6 +1,6 @@
 # chllm: Robust Structured Data Framework for LLMs
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 `chllm` (произносится *chill-em*) — это профессиональный легковесный Python-фреймворк для построения отказоустойчивых конвейеров обработки данных через LLM. Библиотека специализируется на извлечении структурированных ответов (JSON / Pydantic) в условиях нестабильных API, обрывов контекста и жестких лимитов провайдеров.

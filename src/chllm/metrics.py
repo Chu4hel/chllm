@@ -20,6 +20,16 @@ class UsageMetrics(BaseModel):
     prompt_tokens: int = Field(default=0, ge=0)
     candidates_tokens: int = Field(default=0, ge=0)
 
+    def __init__(self, **data: Any) -> None:
+        if "completion_tokens" in data and "candidates_tokens" not in data:
+            data["candidates_tokens"] = data.pop("completion_tokens")
+        super().__init__(**data)
+
+    @property
+    def completion_tokens(self) -> int:
+        """Псевдоним для candidates_tokens, принятый в OpenAI API."""
+        return self.candidates_tokens
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def total_tokens(self) -> int:

@@ -22,3 +22,26 @@ def split_batch(batch: list[T]) -> tuple[list[T], list[T]]:
 
     mid = len(batch) // 2
     return batch[:mid], batch[mid:]
+
+
+def mask_proxy_url(proxy_url: str | None) -> str:
+    """Маскирует учетные данные в URL-строке прокси для безопасного логирования.
+
+    Args:
+        proxy_url: URL прокси-сервера (например, 'http://user:password@host:port').
+
+    Returns:
+        Строка URL с замаскированным паролем или исходная строка.
+    """
+    if not proxy_url:
+        return ""
+    try:
+        from urllib.parse import urlparse, urlunparse
+
+        parsed = urlparse(proxy_url)
+        if parsed.password:
+            new_netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
+            return urlunparse(parsed._replace(netloc=new_netloc))
+    except Exception:
+        pass
+    return proxy_url

@@ -78,10 +78,15 @@ def clean_markdown(text: str) -> str:
     if not text:
         return ""
 
-    # 1. Если есть блок кода markdown - извлекаем ТОЛЬКО его содержимое
-    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
-    if match:
-        return match.group(1).strip()
+    # 1. Если есть блок кода markdown с явным json тегом — извлекаем его
+    match_json = re.search(r"```json\s*(.*?)\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+    if match_json:
+        return match_json.group(1).strip()
+
+    # 1.1. Если есть неразмеченный блок кода, начинающийся со скобок JSON ({ или [)
+    match_generic = re.search(r"```\s*([{\[].*?[}\]])\s*```", text, flags=re.DOTALL)
+    if match_generic:
+        return match_generic.group(1).strip()
 
     # 2. Если блоков маркдауна нет, жестко обрезаем текст по границам JSON
     start_obj = text.find("{")

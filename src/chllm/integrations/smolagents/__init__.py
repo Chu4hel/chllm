@@ -9,7 +9,7 @@ try:
 except ImportError:
     _HAS_SMOLAGENTS = False
 
-from .tools import BaseSmolToolAdapter
+from .tools import BaseSmolToolAdapter, agent_tool
 
 if _HAS_SMOLAGENTS:
     from .models import (
@@ -22,6 +22,7 @@ if _HAS_SMOLAGENTS:
         "BaseSmolToolAdapter",
         "BufferSmolModel",
         "WebChatSmolModel",
+        "agent_tool",
         "create_agent_model",
     ]
 else:
@@ -29,6 +30,7 @@ else:
         "BaseSmolToolAdapter",
         "BufferSmolModel",
         "WebChatSmolModel",
+        "agent_tool",
         "create_agent_model",
     ]
 
